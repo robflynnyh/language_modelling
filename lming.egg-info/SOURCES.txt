@@ -1,0 +1,7 @@
+README.md
+setup.py
+lming.egg-info/PKG-INFO
+lming.egg-info/SOURCES.txt
+lming.egg-info/dependency_links.txt
+lming.egg-info/requires.txt
+lming.egg-info/top_level.txt

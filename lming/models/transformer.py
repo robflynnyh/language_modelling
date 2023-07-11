@@ -10,7 +10,7 @@ from typing import Optional, Tuple, List, Dict, Union, Callable
 
 from apex.normalization import FusedRMSNorm as DEFAULT_NORM
 from apex.normalization import FusedLayerNorm as LayerNorm
-from fused_dense import FusedMLP # flash attn
+from .fused_dense import FusedMLP # flash attn
 
 def exists(val):
     return val is not None

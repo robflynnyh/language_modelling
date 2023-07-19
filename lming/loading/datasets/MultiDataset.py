@@ -40,7 +40,7 @@ class MultiDataset(torch.utils.data.Dataset):
         self.items = self.items[skip_to:]
 
     def create_batches(self):
-        np.random.seed(420), random.seed(420)
+        np.random.seed(1234), random.seed(1234)
         self.items = []
         self.all_df = self.all_df.sort_values(by='length') # sort all_df by length min->max
         indices = np.arange(len(self.all_df))
@@ -70,7 +70,6 @@ class MultiDataset(torch.utils.data.Dataset):
 
 def collate_fn(batch):
     #return batch
-    raise NotImplementedError
     chunks = []
     chunk_lens = [len(x) for x in batch]
     max_chunk_len = max(chunk_lens)
@@ -88,7 +87,7 @@ def collate_fn(batch):
         tokens = torch.stack(chunk_samples) if min(seq_lens) == max(seq_lens) else torch.nn.utils.rnn.pad_sequence(chunk_samples, batch_first=True)
         chunks.append({
             'tokens':tokens,
-            'selection_idx':cur_selection_idx,
+            'selection_idx':cur_selection_idx[selection_idx],
             'lengths':torch.LongTensor(seq_lens),
         })
     return chunks

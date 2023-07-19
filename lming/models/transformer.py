@@ -121,6 +121,7 @@ class CosineAttention(nn.Module):
         n_heads,
         dropout=0.1,
         bias=False,
+        cosine_sim=True,
         temperature=15.5,
         return_attention=False,
         causal=False,
@@ -137,6 +138,8 @@ class CosineAttention(nn.Module):
         self.bias = bias
         self.return_attention = return_attention
         self.causal = causal
+
+        self.cosine_sim = cosine_sim
 
         if self.talking_heads == 'pre' or self.talking_heads == 'both':
             self._head_proj = nn.Conv2d(n_heads, n_heads, (1, 1))
@@ -167,8 +170,7 @@ class CosineAttention(nn.Module):
   
 
     def attend(self, query, key, value, attn_mask, pos_bias):
-        query, key = map(l2norm, (query, key))
-        
+
         dots = einsum('bhid,bhjd->bhij', query, key) * self.temperature
         dots = self.head_proj(dots, mode='pre')
 
@@ -187,15 +189,19 @@ class CosineAttention(nn.Module):
         kv = torch.stack(kv, dim=0)
         if cache is None:
             return kv
-        zero_vector = torch.zeros_like(kv[:, :, :, :1, :])
-        kv_w_cache = torch.cat([cache, kv, zero_vector], dim=-2)
-        kv_w_cache = torch.gather(kv_w_cache, dim=-2, index=cache_indices) # we do this to remove unnecessary padding
+        if exists(cache_indices):
+            zero_vector = torch.zeros_like(kv[:, :, :, :1, :])
+            kv_w_cache = torch.cat([cache, kv, zero_vector], dim=-2)
+            kv_w_cache = torch.gather(kv_w_cache, dim=-2, index=cache_indices) # we do this to remove unnecessary padding
+        else:
+            kv_w_cache = torch.cat([cache, kv], dim=-2)
         return kv_w_cache
 
     def forward(self, x, pos_bias, mask, cache=None, cache_indices=None):
         B, N, C, H, D = *x.shape, self.n_heads, self.head_dim
     
         q, k, v  = self.qkv(x)
+        q, k = map(l2norm, (q, k)) if self.cosine_sim else (q, k)
         kv = self.attach_cache([k, v], cache, cache_indices)
         k, v = kv
 
@@ -235,6 +241,7 @@ class transformer(nn.Module):
             heads, 
             dim_head, 
             causal=True,
+            cosine_sim=True,
             temperature=15.5,
             shared_temperture=False,
             intermediate_loss=True,
@@ -245,14 +252,14 @@ class transformer(nn.Module):
         if depth == 1:
             intermediate_loss = False
 
-        ff_mult = kwargs.get('ff_mult', 4)
         self.checkpoint_every_n = kwargs.get('checkpoint_every_n', 0)
         self.token_shift = kwargs.get('token_shift', False)
-
+        fused_mlp_checkpoint_lvl = kwargs.get('fused_mlp_checkpoint_lvl', 0)
         self.causal = causal
 
         self.temperature = nn.Parameter(torch.tensor(temperature), requires_grad=True) if shared_temperture else temperature
-    
+
+        self.cache_needs_gather = False
 
         self.intermediate_loss = intermediate_loss
 
@@ -278,16 +285,17 @@ class transformer(nn.Module):
                     n_heads=heads, 
                     head_dim=dim_head, 
                     causal=causal,
+                    cosine_sim=cosine_sim,
                     temperature=self.temperature,
                     dropout=dropout,
                     **kwargs
                 )),
-                PreNorm(dim, self.ff(dim, mult=ff_mult))
+                PreNorm(dim, self.ff(dim, checkpoint_lvl=fused_mlp_checkpoint_lvl))
             ]))
 
     @staticmethod
-    def ff(dim):
-        return FusedMLP(dim)
+    def ff(dim, checkpoint_lvl=0):
+        return FusedMLP(dim, checkpoint_lvl=checkpoint_lvl)
 
     @staticmethod
     def create_custom_forward(module):
@@ -328,8 +336,9 @@ class transformer(nn.Module):
         return indices.to(x.device)
 
     def create_masks_and_positions(self, x, length, cache): 
-        x_len = length if length is not None else torch.tensor(x.shape[-2]).expand(x.shape[0])
+        x_len = length if length is not None else torch.tensor(x.shape[-2], device=x.device).expand(x.shape[0])
         cache_len = cache['cache_lengths'] if exists(cache) else 0
+     
         total_len = x_len + cache_len
         kv_mask = torch.arange(total_len.max(), device=x.device).expand(len(total_len), -1) >= total_len.unsqueeze(-1)
         q_mask = torch.arange(x_len.max(), device=x.device).expand(len(x_len), -1) >= x_len.unsqueeze(-1)
@@ -359,8 +368,8 @@ class transformer(nn.Module):
         cached_kvs = []
 
         mask, attn_mask, total_lens, x_len, cache_len, pos_bias = self.create_masks_and_positions(x, length, cache)
-    
-        cache_indices = self.get_cache_indices(x_len, cache_len, cache['cache'], x) if exists(cache) else None
+
+        cache_indices = self.get_cache_indices(x_len, cache_len, cache['cache'], x) if exists(cache) and self.cache_needs_gather else None
     
         for i, (attn, ff) in enumerate(self.layers):
 
@@ -380,6 +389,7 @@ class transformer(nn.Module):
         cached_kvs = torch.stack(cached_kvs, dim=0) if len(cached_kvs) > 0 else None
         cached_kvs = {'cache_lengths': total_lens, 'cache': cached_kvs} if exists(cached_kvs) else None
 
+        self.cache_needs_gather = x_len.max() != x_len.min() # if the lengths are not the same, we need to gather the cache on the next forward pass (if cache is used)
 
         return x, intermediate_logits, cached_kvs
 
@@ -406,6 +416,7 @@ class transformer_lm(nn.Module):
         heads,
         dim_head,
         causal=True,
+        cosine_sim=True,
         temperature=15.5,
         dropout=0.,
         shared_temperture=True,
@@ -429,6 +440,9 @@ class transformer_lm(nn.Module):
         if self_conditioning:
             self.reprojection_layer = nn.Linear(vocab_size, dim)
 
+        if cosine_sim == False: # if cosine sim is false set temp to normal transformer temp i.e. 1/sqrt(dim_head)
+            temperature = 1. / (dim_head ** 0.5)
+
         self.layers = transformer(
             dim = dim, 
             depth = depth, 
@@ -436,6 +450,7 @@ class transformer_lm(nn.Module):
             dim_head = dim_head, 
             causal = causal, 
             dropout = dropout,
+            cosine_sim = cosine_sim,
             temperature = temperature,
             shared_temperture = shared_temperture,
             intermediate_loss = intermediate_loss,
@@ -462,6 +477,10 @@ class transformer_lm(nn.Module):
             return x, logits
         return self_condition if (self.self_conditioning or self.intermediate_loss) and self.training else None
 
+    def print_total_params(self):
+        total_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
+        print('Total params (M):', total_params / 1e6)
+        return total_params
 
     def forward(self, x, length=None, cache:Dict=None):
         '''

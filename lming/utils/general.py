@@ -37,7 +37,7 @@ def find_latest_checkpoint(path:str = './checkpoints'):
     return checkpoints[-1]
 
 
-def load_checkpoint(model, optimizer=None, scheduler=None, path='./checkpoints'):
+def load_checkpoint(args, model, optimizer=None, scheduler=None, path='./checkpoints'):
     latest_checkpoint = find_latest_checkpoint(path)
     if latest_checkpoint is None:
         return 0

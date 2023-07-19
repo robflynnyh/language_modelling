@@ -5,6 +5,7 @@ model:
   heads: 16
   dim_head: 64
   temperature: 15.5
+  cosine_sim: false
   shared_kv: true
   shared_temperture: false
   checkpoint_every_n: 0
@@ -14,7 +15,7 @@ model:
 optimizer:
   name: 'madgrad'
   args:
-    lr: 6e-5
+    lr: 1e-4
 
 scheduler:
   warmup_steps: 3000
@@ -28,7 +29,7 @@ wandb:
   id: "" # leave empty if not resuming a previous run
 
 checkpointing:
-  dir: '/exp/exp4/acp21rjf/checkpoints/language_modelling_spotify/6e5'
+  dir: '/exp/exp4/acp21rjf/checkpoints/language_modelling_spotify/1e4_no_cosim'
   save_every_n_steps: 500
 
 # full data: #'/mnt/parscratch/users/acp21rjf/spotify/audio_txt_pairs.json'

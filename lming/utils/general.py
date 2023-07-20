@@ -37,7 +37,7 @@ def find_latest_checkpoint(path:str = './checkpoints'):
     return checkpoints[-1]
 
 
-def load_checkpoint(args, model, optimizer=None, scheduler=None, path='./checkpoints'):
+def load_checkpoint(args, model, optimizer=None, scheduler=None, path='./checkpoints', location='cpu'):
     latest_checkpoint = find_latest_checkpoint(path)
     if latest_checkpoint is None:
         return 0
@@ -47,8 +47,8 @@ def load_checkpoint(args, model, optimizer=None, scheduler=None, path='./checkpo
         model.load_state_dict(checkpoint['model'])
     except:
         print('loading model with strict=False')
-        model.load_state_dict(checkpoint['model'], strict=False)
-        print('SETTING OPTIMIZER TO NONE DUE TO NON-STRICT LOAD')
+        model.load_state_dict(checkpoint['model'], strict=False, map_location=location)
+        print('SETTING OPTIMIZER TO NONE DUE TO NON-STRICT LOAD'),
         optimizer = None
     print(f'loaded model from {path}')
     if optimizer != None and 'optimizer' in checkpoint:

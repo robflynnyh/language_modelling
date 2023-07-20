@@ -1,0 +1,50 @@
+
+model:
+  dim: 1024
+  depth: 6
+  heads: 16
+  dim_head: 64
+  temperature: 15.5
+  shared_kv: true
+  shared_temperture: false
+  checkpoint_every_n: 0
+  fused_mlp_checkpoint_lvl: 0
+  
+
+optimizer:
+  name: 'madgrad'
+  args:
+    lr: 8e-4
+
+scheduler:
+  warmup_steps: 3000
+
+text_chunking:
+  size: 512
+
+wandb:
+  use: true
+  project_name: "spotify_language_models"
+  id: "" # leave empty if not resuming a previous run
+
+checkpointing:
+  dir: '/exp/exp4/acp21rjf/checkpoints/language_modelling_spotify/8e4_ddp'
+  save_every_n_steps: 500
+
+# full data: #'/mnt/parscratch/users/acp21rjf/spotify/audio_txt_pairs.json'
+# 25% of corpus: '/users/acp21rjf/long-context-asr/reduced_pairs.json'
+data:
+  path: '/mnt/parscratch/users/acp21rjf/spotify/audio_txt_pairs.json'
+  
+training:
+  batch_size: 24
+  backprop_every: 1
+  max_seq_len: 512 # max cache length
+
+# size: 2048 = batch size 176
+# size: 4096 = batch size 88
+# size: 8192 = batch size 44
+# size: 16384 = batch size 22
+# size: 65536 = batch size 5 
+# size: 131072 = batch size 2
+# size: 360000 (1 hour) =  batch size 1

@@ -7,6 +7,7 @@ import random
 import sentencepiece as spm
 import numpy as np
 from typing import Dict, List, Tuple
+from torch.utils.data.distributed import DistributedSampler
 
 def load_spotify(podcast_paths_csv, spotify_base_dir):
     df = pd.read_csv(podcast_paths_csv)
@@ -140,7 +141,46 @@ class SimpleDataloader(torch.utils.data.DataLoader):
             )
 
 
-
-
-
-
+class SimpleDistributedDataloader(torch.utils.data.DataLoader):
+    def __init__(
+        self, 
+        tokenizer:spm.SentencePieceProcessor = load_tokenizer(),
+        spotify_df_path = '/store/store4/data/spotify_text/spotify_podcast_paths.csv',
+        spotify_base_dir = '/store/store4/data/spotify_text/podcast_txt',
+        max_seq_len:int = 1024,
+        batch_size:int = 64,
+        subgroup_shuffle_size:int = 3000,
+        bos_token_id:int = 0,
+        skip_to:int = 0,
+        num_workers = 0,
+        pin_memory = False,
+        world_size = 1,
+        rank = 0,
+    ):
+        self.tokenizer = tokenizer
+        self.num_workers = num_workers
+        self.pin_memory = pin_memory
+        self.dataset = MultiDataset(
+            spotify_df_path = spotify_df_path,
+            spotify_base_dir = spotify_base_dir,
+            tokenizer = tokenizer,
+            max_seq_len = max_seq_len,
+            batch_size = batch_size * world_size,
+            subgroup_shuffle_size = subgroup_shuffle_size,
+            bos_token_id = bos_token_id,
+            skip_to = skip_to,
+        )
+        super().__init__(
+                self.dataset, 
+                batch_size = batch_size,
+                shuffle = False, 
+                num_workers = num_workers,
+                pin_memory = pin_memory, 
+                collate_fn = collate_fn,
+                sampler =  DistributedSampler(
+                    self.dataset,
+                    num_replicas = world_size,
+                    rank = rank,
+                    shuffle = False,
+                )
+            )

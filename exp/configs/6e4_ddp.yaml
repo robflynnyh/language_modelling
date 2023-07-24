@@ -14,7 +14,7 @@ model:
 optimizer:
   name: 'madgrad'
   args:
-    lr: 8e-4
+    lr: 6e-4
 
 scheduler:
   warmup_steps: 3000
@@ -28,13 +28,8 @@ wandb:
   id: "" # leave empty if not resuming a previous run
 
 checkpointing:
-  dir: '/exp/exp4/acp21rjf/checkpoints/language_modelling_spotify/8e4_ddp'
-  save_every_n_steps: 500
-
-# full data: #'/mnt/parscratch/users/acp21rjf/spotify/audio_txt_pairs.json'
-# 25% of corpus: '/users/acp21rjf/long-context-asr/reduced_pairs.json'
-data:
-  path: '/mnt/parscratch/users/acp21rjf/spotify/audio_txt_pairs.json'
+  dir: '/exp/exp4/acp21rjf/checkpoints/language_modelling_spotipile/6e4_ddp'
+  save_every_n_steps: 750
   
 training:
   batch_size: 24

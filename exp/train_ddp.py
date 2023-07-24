@@ -9,8 +9,8 @@ from omegaconf.omegaconf import OmegaConf
 from lming.loading.datasets.MultiDataset import SimpleDistributedDataloader #####!
 import traceback
 from lming.loading.tokenizer import load_tokenizer
-
-from lming.utils.general import load_model, save_model, load_checkpoint
+import datetime
+from lming.utils.general import load_model, save_model, load_checkpoint, optimizer_to
 
 from einops import rearrange
 import numpy as np
@@ -65,7 +65,7 @@ class CosineLRScheduler(torch.optim.lr_scheduler._LRScheduler):
 
 
 def setup(rank, worldsize):
-    dist.init_process_group("nccl")
+    dist.init_process_group(backend='nccl', timeout=datetime.timedelta(seconds=5400))
 
 def cleanup():
     dist.destroy_process_group()
@@ -253,10 +253,11 @@ def train(
             scheduler.step()
         del full_loss, loss_to_log, cur_loss, cur_tokens_in_loss, loss
 
-  
-
     # save final model
-    save_model(model, optimizer, None, i*args.config['training']['batch_size'] + skip_to, args.config)
+    if args.gpu == 0:
+        save_model(model, optimizer, None, i*args.config['training']['batch_size'] + skip_to, args.config)
+        print(f'saved final model and finished training')
+
     return model
 
 
@@ -287,16 +288,18 @@ def main(gpu, args):
             wandb.config.update({'total_params': tparams}, allow_val_change=True)
             print(f'\nLoggging with Wandb id: {wandb.run.id}\n')
 
-
+        
     optimizer, scheduler = load_optimizer(args.config, model)
-    step = load_checkpoint(args, model, optimizer, scheduler, args.config['checkpointing']['dir'], location='cpu')
-    if args.reset_step:
-        step = 0
 
     torch.cuda.set_device(gpu)
     device = torch.device(f'cuda:{gpu}')
+    
     model = DDP(model.to(device), device_ids=[gpu], output_device=gpu, gradient_as_bucket_view=True)
 
+    step = load_checkpoint(args, model, optimizer, scheduler, args.config['checkpointing']['dir'], location=lambda storage, loc: storage)
+    torch.cuda.empty_cache()
+    if args.reset_step:
+        step = 0
     print(f'Starting from podcast: {step}')
     # skip data up to step
     dataloader = SimpleDistributedDataloader(
@@ -310,9 +313,9 @@ def main(gpu, args):
     
     args.gpu = gpu
     final_model = train(args, model, dataloader, optimizer, scheduler, device, skip_to = step)
+    print(f'finished training on gpu: {gpu}')
 
-
-
+    cleanup()
 
 
 if __name__ == '__main__':

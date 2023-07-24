@@ -105,10 +105,23 @@ def get_perplexity(args:argparse.Namespace, model:transformer_lm, text:str, toke
     return loss, total_words
 
 
-
+def convert_from_ddp(model_state_dict):
+    '''
+    Convert model state dict from DDP to single GPU.
+    '''
+    new_state_dict = {}
+    for k, v in model_state_dict.items():
+        if 'module' in k:
+            k = k.replace('module.', '')
+        new_state_dict[k] = v
+    return new_state_dict
 
 def main(args):
     checkpoint = torch.load(args.checkpoint, map_location='cpu')
+    if args.from_ddp:
+        checkpoint['model'] = convert_from_ddp(checkpoint['model'])
+        #torch.save(checkpoint, args.checkpoint)
+
     model_config = checkpoint['config']
     args.config = model_config
 
@@ -140,8 +153,8 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--checkpoint', type=str, default='/exp/exp4/acp21rjf/checkpoints/language_modelling_spotify/1e4/step_105360.pt', help='path to checkpoint')
-
+    parser.add_argument('-c', '--checkpoint', type=str, default='/exp/exp4/acp21rjf/checkpoints/language_modelling_spotipile/6e4_ddp/step_684000.pt', help='path to checkpoint')
+    parser.add_argument('-fddp', '--from_ddp', action='store_true', help='convert model from DDP to single GPU')
     parser.add_argument('-seq', '--seq_len', type=int, default=-1, help='-1 to use setting from config in checkpoint file')
     parser.add_argument('-cache', '--cache_len', type=int, default=-1, help='-1 to use setting from config in checkpoint file')
 

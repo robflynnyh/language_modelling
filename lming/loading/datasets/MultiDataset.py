@@ -15,28 +15,44 @@ def load_spotify(podcast_paths_csv, spotify_base_dir):
     df.rename(columns={'podcast_path':'full_path'}, inplace=True)
     return df
 
+def load_pile(pile_df_path, pile_base_dir):
+    df = pd.read_csv(pile_df_path, header=None)
+    df.columns = ["corpus", "full_path", "length"]
+    df['full_path'] = df['full_path'].apply(lambda x: os.path.join(pile_base_dir, x))
+    return df
+
 class MultiDataset(torch.utils.data.Dataset):
     def __init__(
         self,
         spotify_df_path = '/store/store4/data/spotify_text/spotify_podcast_paths.csv',
         spotify_base_dir = '/store/store4/data/spotify_text/podcast_txt',
+        pile_df_path = '/store/store4/data/thepile/parsed_data.csv',
+        pile_base_dir = '/store/store4/data/thepile/',
+        just_spotify = False,
+        spotify_upsample = 2.0,
         tokenizer:spm.SentencePieceProcessor = None,
         max_seq_len:int = 1024,
         batch_size:int = 64,
-        subgroup_shuffle_size:int = 3000,
+        subgroup_shuffle_size:int = 25000,
         bos_token_id:int = 0,
         skip_to:int = 0,
     ):
         self.spotify_df = load_spotify(spotify_df_path, spotify_base_dir)
         self.spotify_base_dir = spotify_base_dir
+        self.pile_df = load_pile(pile_df_path, pile_base_dir) if not just_spotify else None
+        self.pile_base_dir = pile_base_dir if not just_spotify else None
+
         self.tokenizer = tokenizer
         self.max_seq_len = max_seq_len
         self.subgroup_shuffle_size = subgroup_shuffle_size
         self.batch_size = batch_size
         self.bos_token_id = bos_token_id
 
-        self.all_df = self.spotify_df # can add more datasets here in the future
-        
+        self.spotify_df = self.spotify_df.sample(frac=spotify_upsample, replace=True, random_state=1234).reset_index(drop=True)
+        self.all_df = pd.concat([self.spotify_df, self.pile_df], ignore_index=True) if not just_spotify else self.spotify_df
+
+        print(f'Total Words (B): {self.all_df["length"].sum() / 1e9:.2f}')
+
         self.create_batches()
         self.items = self.items[skip_to:]
 
@@ -44,7 +60,7 @@ class MultiDataset(torch.utils.data.Dataset):
         np.random.seed(1234), random.seed(1234)
         self.items = []
         self.all_df = self.all_df.sort_values(by='length') # sort all_df by length min->max
-        indices = np.arange(len(self.all_df))
+        indices = np.arange(len(self.all_df))   
         indices = [np.random.permutation(indices[i:i+self.subgroup_shuffle_size]) for i in range(0, len(indices), self.subgroup_shuffle_size)]
         indices = np.concatenate(indices)
         indices = [indices[i:i+self.batch_size] for i in range(0, len(indices), self.batch_size)]
@@ -112,7 +128,7 @@ class SimpleDataloader(torch.utils.data.DataLoader):
         spotify_base_dir = '/store/store4/data/spotify_text/podcast_txt',
         max_seq_len:int = 1024,
         batch_size:int = 64,
-        subgroup_shuffle_size:int = 3000,
+        subgroup_shuffle_size:int = 25000,
         bos_token_id:int = 0,
         skip_to:int = 0,
         num_workers = 0,

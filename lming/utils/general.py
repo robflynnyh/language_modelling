@@ -36,6 +36,31 @@ def find_latest_checkpoint(path:str = './checkpoints'):
     checkpoints = sorted(checkpoints, key=lambda x: int(x.split('_')[1].split('.')[0]))
     return checkpoints[-1]
 
+def convert_from_ddp(model_state_dict):
+    '''
+    Convert model state dict from DDP to single GPU.
+    '''
+    new_state_dict = {}
+    for k, v in model_state_dict.items():
+        if 'module' in k:
+            k = k.replace('module.', '')
+        new_state_dict[k] = v
+    return new_state_dict
+
+def optimizer_to(optim, device):
+    for param in optim.state.values():
+        # Not sure there are any global tensors in the state dict
+        if isinstance(param, torch.Tensor):
+            param.data = param.data.to(device)
+            if param._grad is not None:
+                param._grad.data = param._grad.data.to(device)
+        elif isinstance(param, dict):
+            for subparam in param.values():
+                if isinstance(subparam, torch.Tensor):
+                    subparam.data = subparam.data.to(device)
+                    if subparam._grad is not None:
+                        subparam._grad.data = subparam._grad.data.to(device)
+
 
 def load_checkpoint(args, model, optimizer=None, scheduler=None, path='./checkpoints', location='cpu'):
     latest_checkpoint = find_latest_checkpoint(path)
@@ -43,6 +68,7 @@ def load_checkpoint(args, model, optimizer=None, scheduler=None, path='./checkpo
         return 0
     path = os.path.join(path, latest_checkpoint)
     checkpoint = torch.load(path)
+    #checkpoint['model'] = convert_from_ddp(checkpoint['model'])
     try:
         model.load_state_dict(checkpoint['model'])
     except:

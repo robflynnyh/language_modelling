@@ -63,7 +63,7 @@ def optimizer_to(optim, device):
 
 
 def load_checkpoint(args, model, optimizer=None, scheduler=None, path='./checkpoints', location='cpu'):
-    latest_checkpoint = find_latest_checkpoint(path)
+    latest_checkpoint = find_latest_checkpoint(path) if not path.endswith('.pt') else path
     if latest_checkpoint is None:
         return 0
     path = os.path.join(path, latest_checkpoint)

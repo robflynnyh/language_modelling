@@ -154,7 +154,7 @@ def train(
                 current_recording = i * args.config['training']['batch_size'] 
                 total_recordings = len(dataloader) * args.config['training']['batch_size'] 
                 remaining_recordings = total_recordings - current_recording
-                remaining_steps = remaining_recordings // args.config['training']['batch_size']
+                remaining_steps = (remaining_recordings // args.config['training']['batch_size']) +  args.config['training']['batch_size']*10
                 scheduler.set_cosine_schedule(remaining_steps)
 
         prev_selection_mask = None # selection mask from previous chunk

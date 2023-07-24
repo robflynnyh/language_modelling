@@ -2,4 +2,5 @@
 *.pt
 *.zip
 *.gz
+*.npy
 wandb

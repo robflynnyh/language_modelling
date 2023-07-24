@@ -14,10 +14,10 @@ model:
 optimizer:
   name: 'madgrad'
   args:
-    lr: 7e-4
+    lr: 5e-4
 
 scheduler:
-  warmup_steps: 3000
+  warmup_steps: 25000
 
 text_chunking:
   size: 512
@@ -28,7 +28,7 @@ wandb:
   id: "" # leave empty if not resuming a previous run
 
 checkpointing:
-  dir: '/exp/exp4/acp21rjf/checkpoints/language_modelling_spotipile/7e4_ddp'
+  dir: '/exp/exp4/acp21rjf/checkpoints/language_modelling_spotipile/5e4_ddp'
   save_every_n_steps: 750
   
 training:

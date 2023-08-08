@@ -16,6 +16,7 @@ import re
 from tqdm import tqdm
 
 TEST_PATH = '/store/store4/data/TEDLIUM_release1/legacy/test/'
+DEV_PATH = '/store/store4/data/TEDLIUM_release1/legacy/dev/'
 
 
 def open_stm(path:str) -> List[str]:
@@ -45,7 +46,7 @@ def proc_stm_and_timings(stm_path:str):
     all_text = re.sub(r" +", r" ", all_text)
     return all_text, timings
 
-def fetch_test_data(path:str = TEST_PATH):
+def fetch_data(path:str = TEST_PATH):
     audio_path = os.path.join(path, 'sph')
     audio_files = [os.path.join(audio_path, el) for el in os.listdir(audio_path) if el.endswith('.sph')]
     audio_files.sort()
@@ -71,6 +72,8 @@ def get_perplexity(args:argparse.Namespace, model:transformer_lm, text:str, toke
     tokenized_text = [bos] + tokenized_text
     seq_len = args.seq_len if args.seq_len != -1 else args.config['text_chunking']['size']
     cache_len = args.cache_len if args.cache_len != -1 else args.config['training']['max_seq_len']
+
+    print(f'Processing with seq_len: {seq_len} and cache_len: {cache_len}')
 
     loss_fn = lambda logits, targets: loss_ce(
         logits=logits, 
@@ -99,7 +102,7 @@ def get_perplexity(args:argparse.Namespace, model:transformer_lm, text:str, toke
     all_logits = all_logits[:, :-1]
     
     loss = loss_fn(all_logits, target) # reduyction is sum
-    total_words = len(tokenized_text) - 1
+    total_words = len(text.split(' ')) - 1 # -1 bcos last word is not predicted
     perplexity = torch.exp(loss / total_words)
     print(f'Perplexity: {perplexity.item()}')
     return loss, total_words
@@ -136,7 +139,10 @@ def main(args):
     model.print_total_params()
     model.eval()
 
-    _, text_files = fetch_test_data()
+    assert args.split in ['dev', 'test'], 'Split must be dev or test'
+    data_path = TEST_PATH if args.split == 'test' else DEV_PATH
+    print(f'Evaluating {args.split} data')
+    _, text_files = fetch_data(path=data_path)
 
     loss_sum, total_words_sum = 0, 0
     for text_file in text_files:
@@ -153,6 +159,7 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('-split', '--split', type=str, default='test', help='dev or test')
     parser.add_argument('-c', '--checkpoint', type=str, default='/exp/exp4/acp21rjf/checkpoints/language_modelling_spotipile/6e4_ddp/step_684000.pt', help='path to checkpoint')
     parser.add_argument('-fddp', '--from_ddp', action='store_true', help='convert model from DDP to single GPU')
     parser.add_argument('-seq', '--seq_len', type=int, default=-1, help='-1 to use setting from config in checkpoint file')

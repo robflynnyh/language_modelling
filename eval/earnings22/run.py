@@ -16,8 +16,43 @@ import wandb
 import re
 from tqdm import tqdm
 
-TEST_PATH = '/store/store4/data/earnings22/full_transcripts.json'
+ALL_TEXT_DATA = '/store/store4/data/earnings22/full_transcripts.json'
 
+# TEST_MEETINGS = [
+#     "4453225",
+#     "4479524",
+#     "4481904",
+#     "4482249",
+#     "4483912",
+#     "mtngh_fy18_call_audio_04032019"
+# ]
+# DEV_MEETINGS = [
+#     "4449269",
+#     "4469669",
+#     "4471586",
+#     "4474955",
+#     "4482613",
+#     "4483338",
+#     "4483633",
+# ]
+
+
+DEV_MEETINGS = [
+    "4420696",
+    "4448760",
+    "4461799",
+    "4469836",
+    "4473238",
+    "4482110",
+]
+TEST_MEETINGS = [
+    "4432298",
+    "4450488",
+    "4470290",
+    "4479741",
+    "4483338",
+    "4485244",
+]
 
 def parse(txts:List[str]):
     to_remove = ['<inaudible>', '<laugh>'
@@ -26,11 +61,13 @@ def parse(txts:List[str]):
         txts = [txt.replace(r, '') for txt in txts]
     return txts
 
-def fetch_test_data(path:str = TEST_PATH, return_first_n:int = 10) -> List[str]:
+def fetch_test_data(split='test') -> List[str]:
     # # load json file:
+    path = ALL_TEXT_DATA
+    ids = TEST_MEETINGS if split == 'test' else DEV_MEETINGS
     with open(path, 'r') as f:
         data = json.load(f)
-    return list(data.values())[:return_first_n]
+    return [v for k, v in data.items() if k in ids]
 
 
 def loss_ce(logits, labels, ignore_index=-100, label_smoothing=0.0, reduction='sum'):
@@ -41,6 +78,11 @@ def loss_ce(logits, labels, ignore_index=-100, label_smoothing=0.0, reduction='s
             label_smoothing = label_smoothing,
             reduction = reduction
         )
+
+def get_total_words(text:str):
+    # split on spaces or any punctuation and count
+    return len(re.findall(r"[\w']+|[.,!?;]", text))
+    
 
 @torch.no_grad()
 def get_perplexity(args:argparse.Namespace, model:transformer_lm, text:str, tokenizer:spm.SentencePieceProcessor):
@@ -80,7 +122,7 @@ def get_perplexity(args:argparse.Namespace, model:transformer_lm, text:str, toke
     
     loss = loss_fn(all_logits, target) # reduyction is sum
    
-    total_words = len(tokenized_text) - 1
+    total_words = get_total_words(text)
     perplexity = torch.exp(loss / total_words)
     print(f'Perplexity: {perplexity.item()}')
     return loss, total_words
@@ -95,6 +137,13 @@ def convert_from_ddp(model_state_dict):
             k = k.replace('module.', '')
         new_state_dict[k] = v
     return new_state_dict
+
+def preprocess_text(text:str):
+    # regex to remove anything inside any brackets i.e <> or () or []
+    text = re.sub(r'\([^)]*\)|<[^>]*>|\[[^]]*\]', '', text)
+    # then remove any double spaces
+    text = re.sub(r'\s+', ' ', text)
+    return text
 
 
 def main(args):
@@ -115,7 +164,8 @@ def main(args):
     model.print_total_params()
     model.eval()
 
-    text_files = parse(fetch_test_data())
+    assert args.split in ['dev', 'test'], 'split must be one of dev or test'
+    text_files = parse(fetch_test_data(split=args.split))
 
 
 
@@ -123,7 +173,7 @@ def main(args):
     for i, text in enumerate(text_files):
         print(f'Processing {i+1}/{len(text_files)}')
         
-        loss, total_words = get_perplexity(args = args, model = model, text = text, tokenizer = tokenizer)
+        loss, total_words = get_perplexity(args = args, model = model, text = preprocess_text(text), tokenizer = tokenizer)
         loss_sum += loss
         total_words_sum += total_words
 
@@ -134,6 +184,7 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
+    parser.add_argument('-split', '--split', type=str, default='test', help='split to evaluate on')
     parser.add_argument('-c', '--checkpoint', type=str, default='/exp/exp4/acp21rjf/checkpoints/language_modelling_spotipile/6e4_ddp/step_684000.pt', help='path to checkpoint')
     parser.add_argument('-fddp', '--from_ddp', action='store_true', help='convert model from DDP to single GPU')
     parser.add_argument('-seq', '--seq_len', type=int, default=-1, help='-1 to use setting from config in checkpoint file')

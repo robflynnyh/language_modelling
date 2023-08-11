@@ -91,7 +91,7 @@ def load_optimizer(config:Dict, model:torch.nn.Module):
         optimizer = optimizer,
         warmup_steps = config['scheduler']['warmup_steps'],
         peak_value = config['optimizer']['args']['lr'],
-        final_value = 1e-7, # decay to 0
+        final_value = 0, # decay to 0
     )
 
     return optimizer, sheduler
@@ -138,24 +138,26 @@ def train(
 
     max_cache_length = args.config['training']['max_seq_len']
 
+    cur_position = skip_to
+    total_files = len(dataloader.dataset.items)
 
     pbar = tqdm(dataloader)
     for i, batch in enumerate(pbar):
         # save every 100 steps
+        cur_position += batch[0]['tokens'].shape[0]
         if i % args.config['checkpointing']['save_every_n_steps'] == 0 and i != 0 and args.gpu == 0:
-            save_model(model, optimizer, scheduler, i*args.config['training']['batch_size'] + skip_to, args.config)
-
+            save_model(model, optimizer, scheduler, cur_position, args.config)
+        
         chunks = batch
 
         was_warmup = scheduler.is_warmup
         if was_warmup:
             scheduler.is_warmup = scheduler.is_warming_up()
             if not scheduler.is_warmup and was_warmup:
-                current_recording = i * args.config['training']['batch_size'] 
+                current_recording = cur_position
                 total_recordings = len(dataloader) * args.config['training']['batch_size'] 
                 remaining_recordings = total_recordings - current_recording
-                remaining_steps = (remaining_recordings // args.config['training']['batch_size']) +  args.config['training']['batch_size']*10
-                scheduler.set_cosine_schedule(remaining_steps)
+                scheduler.set_cosine_schedule(remaining_recordings)
 
         prev_selection_mask = None # selection mask from previous chunk
         last_kv_set = None
@@ -250,7 +252,7 @@ def train(
             prev_selection_mask = selection_mask.clone()
 
         if not scheduler.is_warmup: # step every batch
-            scheduler.step()
+            scheduler.step(epoch=cur_position)
         del full_loss, loss_to_log, cur_loss, cur_tokens_in_loss, loss
 
     # save final model

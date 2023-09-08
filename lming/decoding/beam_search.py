@@ -101,7 +101,9 @@ class BeamSearch():
             repitition_penalty=0.0, # additional penalty for repitition
             top_am_threshold=-6, # top am scores to consider
             max_cache_length = -1, # max length of cache to keep in memory
-            debug=False
+            debug=False,
+            prune_less_than_val=None,
+            cache_init=None
         ):
         self.tokenizer = tokenizer
         self.beam_width = beam_width
@@ -118,10 +120,13 @@ class BeamSearch():
         self.repitition_penalty = repitition_penalty
         self.top_am_threshold = top_am_threshold
         self.debug = debug
+        self.prune_less_than_val = prune_less_than_val
+        self.cache_init = cache_init
 
     def initiate(self):
         assert len(self.beams) == 0 and self.position == 0, 'initiate can only be called once | beams should be empty'
         lm_logps, state = self.language_model.get_initial_state()
+        state = state if self.cache_init is None else self.cache_init
         self.beams = [
             Beam(
                 state = state,
@@ -194,6 +199,16 @@ class BeamSearch():
             pbar.update(1) if use_tqdm else None
         pbar.close() if use_tqdm else None
 
+    def prune_less_than(self, beams):
+        if self.prune_less_than_val is None:
+            return
+        top_beam_score = beams[0].score
+        num_beams = len(beams)
+        beams = [beam for beam in beams if not beam.score < (top_beam_score - self.prune_less_than_val)] # prune beams that are less than top beam score by prune_less_than_val
+        post_prune_num_beams = len(beams)
+        print(f'Pruned {num_beams - post_prune_num_beams} beams') if self.debug else None
+        return beams
+
     def step(self):
         if self.position == len(self.log_probs):
             return False
@@ -212,13 +227,18 @@ class BeamSearch():
         stime = time.time_ns()
         operations = 0
         blank_operations = 0
-        for beam in self.beams: # this is main bottleneck
+        for beam in self.beams: # kinda sloww
             beam_lm_probs = beam.next_lm_token_lps
-                
+            
             #beam_lm_probs[top_am_indices-1] = torch.nn.functional.log_softmax(beam_lm_probs[top_am_indices-1], dim=-1)
             beam_lm_probs = beam_lm_probs * self.alpha + self.beta
             #joint_am_lm_probs = (beam_lm_probs + cur_am_lgps[1:-1]) # joint_am_lm_probs[i-1] + beam.score
-           
+            # top_am_indices_lm = np.array(top_am_indices)
+            # top_am_indices_lm = top_am_indices_lm[top_am_indices_lm != self.blank_id]
+            # top_am_indices_lm = top_am_indices_lm[top_am_indices_lm != beam.am_sequence[-1]]
+            # if len(top_am_indices_lm) > 0:
+            #     beam_lm_probs[top_am_indices_lm] = beam_lm_probs[top_am_indices_lm] - beam_lm_probs[top_am_indices_lm].logsumexp(dim=-1, keepdim=True)
+
             for i in range(1, self.vocab_size+1):
                 if i not in top_am_indices:
                     continue
@@ -226,6 +246,7 @@ class BeamSearch():
                 operations += 1
                 b_am_seq, b_lm_seq, b_stimes = beam.am_sequence, beam.lm_sequence, beam.stimes
                 #stime = time.time()
+                
                 if b_am_seq[-1] == i or i == self.blank_id: # won't need scoring from language model
                     blank_operations += 1
                     
@@ -254,9 +275,7 @@ class BeamSearch():
         etime = time.time_ns()
         print('beam time', (etime - stime)/1e9, 'operations: ',operations, 'blank operations: ', blank_operations) if self.debug else None
 
-        
-        new_beams = self.merge(new_beams)
-        new_beams = self.prune(new_beams)
+        new_beams = self.prune_less_than(self.prune(self.merge(new_beams))) # merge beams, prune up to top k, prune less than top beam score by prune_less_than_val
 
         if self.position == len(self.log_probs) - 1: # exit if we are at the end 0:
             self.beams = new_beams

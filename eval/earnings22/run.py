@@ -18,24 +18,6 @@ from tqdm import tqdm
 
 ALL_TEXT_DATA = '/store/store4/data/earnings22/full_transcripts.json'
 
-# TEST_MEETINGS = [
-#     "4453225",
-#     "4479524",
-#     "4481904",
-#     "4482249",
-#     "4483912",
-#     "mtngh_fy18_call_audio_04032019"
-# ]
-# DEV_MEETINGS = [
-#     "4449269",
-#     "4469669",
-#     "4471586",
-#     "4474955",
-#     "4482613",
-#     "4483338",
-#     "4483633",
-# ]
-
 
 DEV_MEETINGS = [
     "4420696",
@@ -123,9 +105,10 @@ def get_perplexity(args:argparse.Namespace, model:transformer_lm, text:str, toke
     loss = loss_fn(all_logits, target) # reduyction is sum
    
     total_words = get_total_words(text)
+    total_tokens = len(tokenized_text)
     perplexity = torch.exp(loss / total_words)
     print(f'Perplexity: {perplexity.item()}')
-    return loss, total_words
+    return loss, total_words, total_tokens
 
 def convert_from_ddp(model_state_dict):
     '''
@@ -169,15 +152,17 @@ def main(args):
 
 
 
-    loss_sum, total_words_sum = 0, 0
+    loss_sum, total_words_sum, tokens_sum = 0, 0, 0
     for i, text in enumerate(text_files):
         print(f'Processing {i+1}/{len(text_files)}')
         
-        loss, total_words = get_perplexity(args = args, model = model, text = preprocess_text(text), tokenizer = tokenizer)
+        loss, total_words, total_tokens = get_perplexity(args = args, model = model, text = preprocess_text(text), tokenizer = tokenizer)
         loss_sum += loss
         total_words_sum += total_words
+        tokens_sum += total_tokens
 
     perplexity = torch.exp(loss_sum / total_words_sum)
+    print(f'Total Words: {total_words_sum}, Total Tokens: {tokens_sum}')
     print(f'\n\n -----------------\nOverall Perplexity: {perplexity.item()}')
   
 

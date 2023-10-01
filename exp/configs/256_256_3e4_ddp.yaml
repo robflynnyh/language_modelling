@@ -4,7 +4,7 @@ model:
   depth: 6
   heads: 16
   dim_head: 64
-  temperature: 15.5
+  temperature: 18.0
   shared_kv: true
   shared_temperture: false
   checkpoint_every_n: 0
@@ -14,13 +14,13 @@ model:
 optimizer:
   name: 'madgrad'
   args:
-    lr: 3e-5
+    lr: 3e-4
 
 scheduler:
-  warmup_steps: 3000
+  warmup_steps: 2000
 
 text_chunking:
-  size: 512
+  size: 256
 
 wandb:
   use: true
@@ -28,18 +28,13 @@ wandb:
   id: "" # leave empty if not resuming a previous run
 
 checkpointing:
-  dir: '/exp/exp4/acp21rjf/checkpoints/language_modelling_spotify/3e5'
-  save_every_n_steps: 500
-
-# full data: #'/mnt/parscratch/users/acp21rjf/spotify/audio_txt_pairs.json'
-# 25% of corpus: '/users/acp21rjf/long-context-asr/reduced_pairs.json'
-data:
-  path: '/mnt/parscratch/users/acp21rjf/spotify/audio_txt_pairs.json'
+  dir: '/exp/exp4/acp21rjf/checkpoints/language_modelling_spotipile/5e4_256_256_v4'
+  save_every_n_steps: 750
   
 training:
   batch_size: 24
   backprop_every: 1
-  max_seq_len: 512 # max cache length
+  max_seq_len: 256 # max cache length
 
 # size: 2048 = batch size 176
 # size: 4096 = batch size 88

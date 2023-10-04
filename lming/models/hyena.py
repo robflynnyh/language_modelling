@@ -7,21 +7,58 @@ import torch.nn.functional as F
 from functools import partial
 
 from einops import rearrange, repeat
+from apex.normalization import FusedRMSNorm as DEFAULT_NORM
+from apex.normalization import FusedLayerNorm as LayerNorm
+
+# try:
+#     from lming.components.fftconv import fftconv_ref, fftconv_func 
+# except ImportError:
+fftconv_func = None
 
 try:
-    from src.ops.fftconv import fftconv_ref, fftconv_func 
-except ImportError:
-    fftconv_func = None
-
-try:
-    from lming.components import FusedDense
+    from lming.components.fused_dense import FusedDense
 except ImportError:
     FusedDense = None
 
-import src.utils.registry as registry
-from src.utils.train import OptimModule
-from src.utils.config import instantiate, auto_assign_attrs
-from src.models.nn import Activation
+class OptimModule(nn.Module):
+    """ Interface for Module that allows registering buffers/parameters with configurable optimizer hyperparameters """
+
+    def register(self, name, tensor, lr=None, wd=0.0):
+        """Register a tensor with a configurable learning rate and 0 weight decay"""
+
+        if lr == 0.0:
+            self.register_buffer(name, tensor)
+        else:
+            self.register_parameter(name, nn.Parameter(tensor))
+
+            optim = {}
+            if lr is not None: optim["lr"] = lr
+            if wd is not None: optim["weight_decay"] = wd
+            setattr(getattr(self, name), "_optim", optim)
+
+def auto_assign_attrs(cls, **kwargs):
+    for k, v in kwargs.items():
+        setattr(cls, k, v)
+
+def Activation(activation=None, size=None, dim=-1):
+    if activation in [ None, 'id', 'identity', 'linear' ]:
+        return nn.Identity()
+    elif activation == 'tanh':
+        return nn.Tanh()
+    elif activation == 'relu':
+        return nn.ReLU()
+    elif activation == 'gelu':
+        return nn.GELU()
+    elif activation in ['swish', 'silu']:
+        return nn.SiLU()
+    elif activation == 'glu':
+        return nn.GLU(dim=dim)
+    elif activation == 'sigmoid':
+        return nn.Sigmoid()
+    elif activation == 'softplus':
+        return nn.Softplus()
+    else:
+        raise NotImplementedError("hidden activation '{}' is not implemented".format(activation))
 
 
 # reference convolution with residual connection
@@ -290,9 +327,8 @@ class HyenaOperator(nn.Module):
             padding=self.short_filter_order - 1
         )
         
-        filter_cls = instantiate(registry.layer, filter_cls, partial=True)
-                    
-        self.filter_fn = filter_cls(
+
+        self.filter_fn = HyenaFilter(
             self.head_dim * self.inner_factor * (self.order - 1), 
             order=self.filter_order, 
             seq_len=self.l_max,
@@ -357,3 +393,86 @@ class HyenaOperator(nn.Module):
     @property
     def d_output(self):
         return self.d_model
+
+class PreNorm(nn.Module):
+    def __init__(self, dim, fn, norm_cls=DEFAULT_NORM):
+        super().__init__()
+        self.norm = norm_cls(dim)
+        self.fn = fn
+    def forward(self, x, *args, **kwargs):
+        return self.fn(self.norm(x), *args, **kwargs)
+
+class HyenaLM(nn.Module):
+    def __init__(
+            self,
+            vocab_size,
+            d_model = 768,
+            n_layers = 6,
+            l_max = 16384,
+            order = 2,
+            filter_order = 64,
+            num_heads = 1,
+            inner_factor = 1,
+            outer_mixing = False,
+            fused_bias_fc = True,
+            dropout = 0.0,
+            filter_dropout = 0.0,
+            post_order_ffn = False,
+            jit_filter = False,
+            short_filter_order=3,
+            activation = 'id',
+            **filter_args
+        ):
+        
+        super().__init__()
+        self.layers = nn.ModuleList([])
+        for _ in range(n_layers):
+            self.layers.append(
+                PreNorm(
+                    d_model, 
+                    HyenaOperator(
+                        d_model,
+                        l_max=l_max,
+                        order=order,
+                        filter_order=filter_order,
+                        num_heads=num_heads,
+                        inner_factor=inner_factor,
+                        outer_mixing=outer_mixing,
+                        fused_bias_fc=fused_bias_fc,
+                        dropout=dropout,
+                        filter_dropout=filter_dropout,
+                        post_order_ffn=post_order_ffn,
+                        jit_filter=jit_filter,
+                        short_filter_order=short_filter_order,
+                        activation=activation,
+                        **filter_args
+                    )
+                )
+            )
+        self.embedding = nn.Embedding(vocab_size, d_model)
+        self.predictor = PreNorm(d_model, nn.Linear(d_model, vocab_size))
+
+    def print_total_params(self):
+        params = sum(p.numel() for p in self.parameters())
+        print(f"Total parameters: {params/1e6:.2f} (M)")
+        return params
+
+    def forward(self, x, *args, **kwargs):
+
+        x = self.embedding(x)
+        for layer in self.layers:
+            x = layer(x, *args, **kwargs) + x
+        x = self.predictor(x)
+        return x
+
+
+
+if __name__ == '__main__':
+    model = HyenaLM(vocab_size=4095, n_layers=12, d_model=1024)
+    model.print_total_params()
+    x = torch.randint(0, 4095, (5, 4096), dtype=torch.long, device='cuda')
+    model = model.to(x.device)
+    with torch.autocast(device_type='cuda', dtype=torch.bfloat16): # autocast to fp16
+        x = model(x)
+    print(x.shape)
+    

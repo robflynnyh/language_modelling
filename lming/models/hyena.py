@@ -9,6 +9,7 @@ from functools import partial
 from einops import rearrange, repeat
 from apex.normalization import FusedRMSNorm as DEFAULT_NORM
 from apex.normalization import FusedLayerNorm as LayerNorm
+from torch.utils.checkpoint import checkpoint
 
 # try:
 #     from lming.components.fftconv import fftconv_ref, fftconv_func 
@@ -409,6 +410,7 @@ class HyenaLM(nn.Module):
             d_model = 768,
             n_layers = 6,
             l_max = 16384,
+            checkpoint_every_n = 0,
             order = 2,
             filter_order = 64,
             num_heads = 1,
@@ -423,8 +425,9 @@ class HyenaLM(nn.Module):
             activation = 'id',
             **filter_args
         ):
-        
         super().__init__()
+        self.checkpoint_every_n = checkpoint_every_n
+        self.depth = n_layers
         self.layers = nn.ModuleList([])
         for _ in range(n_layers):
             self.layers.append(
@@ -457,20 +460,31 @@ class HyenaLM(nn.Module):
         print(f"Total parameters: {params/1e6:.2f} (M)")
         return params
 
+    @staticmethod
+    def create_custom_forward(module):
+        def custom_forward(*args, **kwargs):
+            return module(*args, **kwargs)
+        return custom_forward
+
+    def checkpoint_layer(self, layer, module, *args, **kwargs):
+        condition = self.training and self.checkpoint_every_n != 0 and layer < self.depth - \
+            1 and layer % self.checkpoint_every_n == 0
+        return checkpoint(self.create_custom_forward(module), *args, **kwargs) if condition else module(*args, **kwargs)
+
     def forward(self, x, *args, **kwargs):
 
         x = self.embedding(x)
-        for layer in self.layers:
-            x = layer(x, *args, **kwargs) + x
+        for i, layer in enumerate(self.layers):
+            x = self.checkpoint_layer(i, layer, x, *args, **kwargs)
         x = self.predictor(x)
         return x
 
 
 
 if __name__ == '__main__':
-    model = HyenaLM(vocab_size=4095, n_layers=12, d_model=1024)
+    model = HyenaLM(vocab_size=4095, n_layers=12, d_model=1024, checkpoint_every_n=1)
     model.print_total_params()
-    x = torch.randint(0, 4095, (5, 4096), dtype=torch.long, device='cuda')
+    x = torch.randint(0, 4095, (5, 16384), dtype=torch.long, device='cuda')
     model = model.to(x.device)
     with torch.autocast(device_type='cuda', dtype=torch.bfloat16): # autocast to fp16
         x = model(x)

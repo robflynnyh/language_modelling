@@ -16,13 +16,11 @@ from torch.utils.checkpoint import checkpoint
 # except ImportError:
 fftconv_func = None
 
-try:
-    from lming.components.fused_dense import FusedDense
-except ImportError:
-    FusedDense = None
+from lming.components.fused_dense import FusedDense, FusedMLP
 
 class OptimModule(nn.Module):
     """ Interface for Module that allows registering buffers/parameters with configurable optimizer hyperparameters """
+
 
     def register(self, name, tensor, lr=None, wd=0.0):
         """Register a tensor with a configurable learning rate and 0 weight decay"""
@@ -31,6 +29,9 @@ class OptimModule(nn.Module):
             self.register_buffer(name, tensor)
         else:
             self.register_parameter(name, nn.Parameter(tensor))
+            # register_hook on 'name' parameter
+            #self.__getattr__(name).register_hook(lambda grad: grad * 0.01)
+
 
             optim = {}
             if lr is not None: optim["lr"] = lr
@@ -343,13 +344,16 @@ class HyenaOperator(nn.Module):
         "Fast inference mode via distilled recurrence"
         raise NotImplementedError("Working on it!")
     
-    def forward(self, u, *args, **kwargs):
+    def forward(self, u, mask=None, *args, **kwargs):
         l = u.size(-2)
         l_filter = min(l, self.l_max)
         u = self.in_proj(u)
         u = rearrange(u, 'b l d -> b d l')
         
         uc = self.short_filter(u)[...,:l_filter] 
+
+        if mask is not None:
+            uc = uc.masked_fill(~mask[:,None], 0)
         
         uc = rearrange(uc, 'b (ho v) (z l) -> b ho v z l', 
             z=self.num_blocks, 
@@ -430,7 +434,7 @@ class HyenaLM(nn.Module):
         self.depth = n_layers
         self.layers = nn.ModuleList([])
         for _ in range(n_layers):
-            self.layers.append(
+            self.layers.append(nn.ModuleList([
                 PreNorm(
                     d_model, 
                     HyenaOperator(
@@ -450,8 +454,13 @@ class HyenaLM(nn.Module):
                         activation=activation,
                         **filter_args
                     )
+                ),
+                PreNorm(
+                    d_model,
+                    FusedMLP(d_model, checkpoint_lvl=0)
                 )
-            )
+            ]))
+            
         self.embedding = nn.Embedding(vocab_size, d_model)
         self.predictor = PreNorm(d_model, nn.Linear(d_model, vocab_size))
 
@@ -471,15 +480,15 @@ class HyenaLM(nn.Module):
             1 and layer % self.checkpoint_every_n == 0
         return checkpoint(self.create_custom_forward(module), *args, **kwargs) if condition else module(*args, **kwargs)
 
-    def forward(self, x, *args, **kwargs):
-
+    def forward(self, x, mask=None, *args, **kwargs):
         x = self.embedding(x)
-        for i, layer in enumerate(self.layers):
-            x = self.checkpoint_layer(i, layer, x, *args, **kwargs)
+        for i, (hOp, ff) in enumerate(self.layers):
+            x = self.checkpoint_layer(i, hOp, x, mask, *args, **kwargs) + x
+            x = self.checkpoint_layer(i, ff, x, *args, **kwargs) + x
         x = self.predictor(x)
         return x
 
-
+#TODO: add inference mode
 
 if __name__ == '__main__':
     model = HyenaLM(vocab_size=4095, n_layers=12, d_model=1024, checkpoint_every_n=1)

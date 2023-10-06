@@ -13,7 +13,7 @@ from typing import Optional, Tuple, List, Dict, Union, Callable
 
 from apex.normalization import FusedRMSNorm as DEFAULT_NORM
 from apex.normalization import FusedLayerNorm as LayerNorm
-from lming.components import FusedMLP # from flash attn lib
+from lming.components.fused_dense import FusedMLP # from flash attn lib
 
 
 def exists(val):

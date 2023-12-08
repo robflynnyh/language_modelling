@@ -1,34 +1,33 @@
-architecture: 'hyena' # transformer | hyena (so far)
+architecture: 'mamba'
 
 model:
-  checkpoint_every_n: 1
-  n_layers: 12
-  #w: 14
-  d_model: 640
+  d_model: 1024
+  n_layer: 8
   
 
 optimizer:
   name: 'madgrad'
   args:
-    lr: 3.0e-4
+    lr: 1e-3
 
 scheduler:
   warmup_steps: 2000
 
 text_chunking:
-  size: 2048
+  size: 4096
 
 wandb:
   use: true
   project_name: "spotify_language_models"
+  name: 'mamba_test'
   id: "" # leave empty if not resuming a previous run
 
 checkpointing:
-  dir: '/exp/exp4/acp21rjf/checkpoints/language_modelling_spotipile/hyena/test'
+  dir: '/exp/exp4/acp21rjf/checkpoints/language_modelling_spotipile/mamba'
   save_every_n_steps: 750
   
 training:
-  batch_size: 10
+  batch_size: 12
   backprop_every: 1
 
 # size: 2048 = batch size 176

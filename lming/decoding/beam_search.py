@@ -1,3 +1,5 @@
+# THIS IS CTC BEAM SEARCH FOR ASR LM SHALLOW FUSION NOT FOR LM GENERATION!!
+
 import torch, numpy as np, pickle as pkl, os
 from typing import List, Dict, Tuple, Optional, Union
 from importlib import reload as rl

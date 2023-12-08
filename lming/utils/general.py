@@ -2,6 +2,8 @@ import torch, os
 from typing import Dict, List, Tuple
 from lming.models.transformer import transformer_lm
 from lming.models.hyena import HyenaLM
+from lming.models.lru import LruLM
+from lming.models.mamba import MambaLMHeadModel
 
 
 def load_txt(path:str) -> str:
@@ -15,6 +17,10 @@ def load_model(config:Dict, vocab_size):
         model = transformer_lm(**config.model, vocab_size=vocab_size)
     elif architecture == 'hyena':
         model = HyenaLM(**config.model, vocab_size=vocab_size)
+    elif architecture == 'lru':
+        model = LruLM(**config.model, vocab_size=vocab_size)
+    elif architecture == 'mamba':
+        model = MambaLMHeadModel(**config.model, vocab_size=vocab_size)
     else:
         raise NotImplementedError(f'architecture {architecture} not implemented :(')
     return model

@@ -59,7 +59,8 @@ class LRULayer(nn.Module):
         
         f_real = f_real[None, None, :].expand_as(input_real)
         f_imag = f_imag[None, None, :].expand_as(input_real)
-    
+
+        
         output_real, output_imag = complex_scan(
             input_real.contiguous(), input_imag.contiguous(),
             f_real.contiguous(), f_imag.contiguous()
@@ -82,33 +83,36 @@ class PreNorm(nn.Module):
     def forward(self, x, *args, **kwargs):
         return self.fn(self.norm(x), *args, **kwargs)
 
+class Residual(nn.Module):
+    def __init__(self, fn):
+        super().__init__()
+        self.fn = fn
+    def forward(self, x, *args, **kwargs):
+        return self.fn(x, *args, **kwargs) + x
+
 class LruLM(nn.Module):
     def __init__(
             self,
             vocab_size,
             d_model = 768,
-            n_layers = 6,
+            n_layers = 8,
             dropout=0.0,
-            checkpoint_every_n = 0,
+            checkpoint_every_n = 0
         ):
         super().__init__()
         self.checkpoint_every_n = checkpoint_every_n
         self.depth = n_layers
         self.layers = nn.ModuleList([])
         for _ in range(n_layers):
-            self.layers.append(nn.ModuleList([
-                PreNorm(
+            self.layers.append(
+                Residual(PreNorm(
                     d_model, 
                     LRULayer(
                         d_model = d_model,
                         dropout = dropout
                     )
-                ),
-                PreNorm(
-                    d_model,
-                    FusedMLP(d_model, checkpoint_lvl=0)
-                )
-            ]))
+                ))
+            )
             
         self.embedding = nn.Embedding(vocab_size, d_model)
         self.predictor = PreNorm(d_model, nn.Linear(d_model, vocab_size))
@@ -129,18 +133,17 @@ class LruLM(nn.Module):
             1 and layer % self.checkpoint_every_n == 0
         return checkpoint(self.create_custom_forward(module), *args, **kwargs) if condition else module(*args, **kwargs)
 
-    def forward(self, x, *args, **kwargs):
+    def forward(self, x, *args):
         x = self.embedding(x)
-        for i, (lOp, ff) in enumerate(self.layers):
-            x = self.checkpoint_layer(i, lOp, x, *args, **kwargs) + x
-            x = self.checkpoint_layer(i, ff, x, *args, **kwargs) + x
+        for i, lOp in enumerate(self.layers):
+            x = self.checkpoint_layer(i, lOp, x, *args)
         x = self.predictor(x)
         return x
 
 if __name__ == '__main__':
-    lru = LruLM(1000, d_model=768, n_layers=7, checkpoint_every_n=0)
+    lru = LruLM(1000, d_model=1024, n_layers=10, checkpoint_every_n=0)
     lru.print_total_params()
-    x = torch.randint(0, 1000, (1, 25000), device='cuda')
+    x = torch.randint(0, 1000, (1, 20000), device='cuda')
     lru = lru.to(x.device)
     y = lru(x)
     print(y.shape)

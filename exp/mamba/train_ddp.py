@@ -161,8 +161,14 @@ def train(
             print(f'chunk {ix}/{len(chunks)}')
             
             tokens, lengths, selection_mask = chunk_json['tokens'], chunk_json['lengths'], chunk_json['selection_idx']
+            # drop tokens with length smaller than 12
+            tokens, lengths  = tokens[lengths >= 8], lengths[lengths >= 8]# some bug in s6 code
+            if lengths.numel() == 0:
+                continue # skip empty batch
+            
             tokens, lengths = tokens.to(device, dtype=torch.long), lengths.to(device, dtype=torch.long)
-       
+
+
             targets = tokens.clone()
             targets[:, :-1] = tokens[:, 1:] # shift right
             if lengths.max() == lengths.min():
@@ -174,7 +180,7 @@ def train(
             targets = mark_padding(targets, mask, -100)
 
             with autocast(device.type, dtype=torch.bfloat16):
-                pred = model(input_ids = tokens).logits
+                pred = model(input_ids = tokens.contiguous()).logits
                 B,N,C = pred.shape 
                 loss = loss_fn(logits=pred, targets=targets) 
 

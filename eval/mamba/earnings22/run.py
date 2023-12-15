@@ -16,7 +16,7 @@ import wandb
 import re
 from tqdm import tqdm
 
-ALL_TEXT_DATA = '/store/store4/data/earnings22/full_transcripts.json'
+ALL_TEXT_DATA = '/store/store4/data/earnings-22/full_transcripts.json'
 
 
 DEV_MEETINGS = [
@@ -67,14 +67,14 @@ def get_total_words(text:str):
     
 
 @torch.no_grad()
-def get_perplexity(args:argparse.Namespace, model:transformer_lm, text:str, tokenizer:spm.SentencePieceProcessor):
+def get_perplexity(args:argparse.Namespace, model:transformer_lm, text:str, tokenizer:spm.SentencePieceProcessor, prev_cache:Dict[str, torch.Tensor] = None):
     tokenized_text = tokenizer.encode(text)
     bos = tokenizer.bos_id()
     tokenized_text = [bos] + tokenized_text
-    # remove any unk tokens
-    tokenized_text = [t for t in tokenized_text if t != tokenizer.unk_id()]
-    seq_len = args.seq_len if args.seq_len != -1 else args.config['text_chunking']['size']
-    cache_len = args.cache_len if args.cache_len != -1 else args.config['training']['max_seq_len']
+    seq_len = args.seq_len *4//2 if args.seq_len != -1 else args.config['text_chunking']['size'] *4// 2
+    cache_len = seq_len
+
+    print(f'Processing with seq_len: {seq_len} and cache_len: {cache_len}')
 
     loss_fn = lambda logits, targets: loss_ce(
         logits=logits, 
@@ -84,31 +84,29 @@ def get_perplexity(args:argparse.Namespace, model:transformer_lm, text:str, toke
 
     all_logits = []
     # process text in chunks of seq_len
-    prev_cache = None
+    inference_params = None # look at:https://github.com/state-spaces/mamba/blob/bae8d1a42fec58f4cdd300bf3b987d05eab22ed0/mamba_ssm/utils/generation.py#L18
+
     pbar = tqdm(range(0, len(tokenized_text), seq_len), total=len(tokenized_text)//seq_len)
     for i in pbar:
         cur_chunk = tokenized_text[i:i+seq_len]
         cur_chunk = torch.LongTensor(cur_chunk).unsqueeze(0).to(model.device)
    
-        logits, _, cached_kvs = model(x = cur_chunk, cache = prev_cache)
-        all_logits.append(logits)
-        if cache_len != 0:
-            prev_cache = cached_kvs
-            prev_cache['cache'] = prev_cache['cache'][:, :, :, :, -cache_len:]
-            prev_cache['cache_lengths'] = prev_cache['cache_lengths'] * 0 + prev_cache['cache'].shape[-2]
+        logits = model(
+            input_ids = cur_chunk, 
+        ).logits
 
+        all_logits.append(logits)
+    
     pbar.close()
     all_logits = torch.cat(all_logits, dim=1)
     target = torch.LongTensor(tokenized_text)[None, 1:].to(model.device)    
     all_logits = all_logits[:, :-1]
     
     loss = loss_fn(all_logits, target) # reduyction is sum
-   
-    total_words = get_total_words(text)
-    total_tokens = len(tokenized_text)
+    total_words = len(text.split(' ')) - 1 # -1 bcos last word is not predicted
     perplexity = torch.exp(loss / total_words)
-    print(f'Perplexity: {perplexity.item()}')
-    return loss, total_words, total_tokens
+    print(f'Perplexity: {perplexity.item()}, Total words: {total_words}, Total Tokens: {len(tokenized_text)}')
+    return loss, total_words, len(tokenized_text)
 
 def convert_from_ddp(model_state_dict):
     '''
@@ -161,9 +159,9 @@ def main(args):
         total_words_sum += total_words
         tokens_sum += total_tokens
 
-    perplexity = torch.exp(loss_sum / total_words_sum)
+    perplexity = torch.exp(loss_sum / tokens_sum)
     print(f'Total Words: {total_words_sum}, Total Tokens: {tokens_sum}')
-    print(f'\n\n -----------------\nOverall Perplexity: {perplexity.item()}')
+    print(f'\n\n -----------------\nOverall Perplexity (TOKEN LEVEL): {perplexity.item()}')
   
 
 

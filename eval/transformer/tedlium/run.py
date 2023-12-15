@@ -207,9 +207,9 @@ def main(args):
         loss_sum += loss
         total_words_sum += total_words
 
-    perplexity = torch.exp(loss_sum / total_words_sum)
+    perplexity = torch.exp(loss_sum / tokens_sum)
     print(f'Total Words: {total_words_sum}, Total Tokens: {tokens_sum}')
-    print(f'\n\n -----------------\nOverall Perplexity: {perplexity.item()}')
+    print(f'\n\n -----------------\nOverall Perplexity (TOKEN LEVEL): {perplexity.item()}')
   
 
 

@@ -4,6 +4,7 @@ from lming.models.transformer import transformer_lm
 from lming.models.hyena import HyenaLM
 from lming.models.lru import LruLM
 from lming.models.mamba import MambaLMHeadModel
+from lming.models.meta_transformer import MetaTransformer
 
 
 def load_txt(path:str) -> str:
@@ -21,6 +22,8 @@ def load_model(config:Dict, vocab_size):
         model = LruLM(**config.model, vocab_size=vocab_size)
     elif architecture == 'mamba':
         model = MambaLMHeadModel(**config.model, vocab_size=vocab_size)
+    elif architecture == 'meta_transformer':
+        model = MetaTransformer(**config.model, vocab_size=vocab_size)
     else:
         raise NotImplementedError(f'architecture {architecture} not implemented :(')
     return model

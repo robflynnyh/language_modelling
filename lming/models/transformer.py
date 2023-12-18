@@ -193,7 +193,7 @@ class CosineAttention(nn.Module):
 
         dots = einsum('bhid,bhjd->bhij', query, key) * self.temperature
         dots = self.head_proj(dots, mode='pre')
-
+        
         dots += pos_bias
 
         dots.masked_fill_(attn_mask, -torch.finfo(dots.dtype).max)
@@ -533,21 +533,19 @@ class transformer_lm(nn.Module):
         print('Total params (M):', total_params / 1e6)
         return total_params
 
-    def forward(self, x, length=None, cache: Dict = None):
+    def forward(self, x, length=None, cache: Dict = None, return_hidden=False):
         '''
         x: [B, N] (embedding indices)
         length: [B] (length of each sequence)
         cache: {cache_lengths: [B, N], cache: [L, KV, B, H, N, D]} KV: key and value (2)
         '''
+
         x = self.embedding(x)
         x = self.abs_pos(x)
 
-        x, interim_logits, cached_kvs = self.layers(
-            x, length, self_condtioning=self.self_condition_fn(), cache=cache)
-        x = self.post_norm(x)
-        x = self.to_logits(x)
-
-        return x, interim_logits, cached_kvs
+        x_h, interim_logits, cached_kvs = self.layers(x, length, self_condtioning=self.self_condition_fn(), cache=cache)
+        x = self.to_logits(self.post_norm(x_h))
+        return (x, interim_logits, cached_kvs) if not return_hidden else (x, x_h, interim_logits, cached_kvs)
 
 
 def do_sample(distribution, temperature=1.0, top_k=25):

@@ -28,8 +28,8 @@ class MultiDataset(torch.utils.data.Dataset):
         spotify_base_dir = '/store/store4/data/spotify_text/podcast_txt',
         pile_df_path = '/store/store4/data/thepile/parsed_data.csv',
         pile_base_dir = '/store/store4/data/thepile/',
-        just_spotify = False,
-        spotify_upsample = 2.0,
+        just_spotify = True, # False
+        spotify_upsample = 2.0, # 2
         tokenizer:spm.SentencePieceProcessor = None,
         max_seq_len:int = 1024,
         batch_size:int = 64,

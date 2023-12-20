@@ -36,7 +36,6 @@ def load_pile(pile_df_path, pile_base_dir):
 # pile_base_dir = '/store/store4/data/thepile/',
 
 
-
 class MultiDataset(torch.utils.data.Dataset):
     def __init__(
         self,
@@ -44,7 +43,7 @@ class MultiDataset(torch.utils.data.Dataset):
         spotify_base_dir = default_spotify_base_dir,
         pile_df_path = default_thepile_df_path,
         pile_base_dir = default_thepile_base_dir,
-        just_spotify = False, # False
+        just_spotify = True, # False
         spotify_upsample = 2.0, # 2
         tokenizer:spm.SentencePieceProcessor = None,
         max_seq_len:int = 1024,
@@ -53,11 +52,12 @@ class MultiDataset(torch.utils.data.Dataset):
         bos_token_id:int = 0,
         skip_to:int = 0,
     ):
+     
         self.spotify_df = load_spotify(spotify_df_path, spotify_base_dir)
         self.spotify_base_dir = spotify_base_dir
         self.pile_df = load_pile(pile_df_path, pile_base_dir) if not just_spotify else None
         self.pile_base_dir = pile_base_dir if not just_spotify else None
-
+        
         self.tokenizer = tokenizer
         self.max_seq_len = max_seq_len
         self.subgroup_shuffle_size = subgroup_shuffle_size
@@ -140,8 +140,8 @@ class SimpleDataloader(torch.utils.data.DataLoader):
     def __init__(
         self, 
         tokenizer:spm.SentencePieceProcessor = load_tokenizer(),
-        spotify_df_path = '/store/store4/data/spotify_text/spotify_podcast_paths.csv',
-        spotify_base_dir = '/store/store4/data/spotify_text/podcast_txt',
+        spotify_df_path = default_spotify_df_path,
+        spotify_base_dir = default_spotify_base_dir,
         max_seq_len:int = 1024,
         batch_size:int = 64,
         subgroup_shuffle_size:int = 25000,
@@ -177,8 +177,8 @@ class SimpleDistributedDataloader(torch.utils.data.DataLoader):
     def __init__(
         self, 
         tokenizer:spm.SentencePieceProcessor = load_tokenizer(),
-        spotify_df_path = '/store/store4/data/spotify_text/spotify_podcast_paths.csv',
-        spotify_base_dir = '/store/store4/data/spotify_text/podcast_txt',
+        spotify_df_path = default_spotify_df_path,
+        spotify_base_dir = default_spotify_base_dir,
         max_seq_len:int = 1024,
         batch_size:int = 64,
         subgroup_shuffle_size:int = 3000,

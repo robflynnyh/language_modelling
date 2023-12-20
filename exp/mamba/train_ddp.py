@@ -32,6 +32,14 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 import warnings
 
+def get_dtype(args):
+    if args.dtype == 'fp16':
+        dtype = torch.half
+    elif args.dtype == 'bf16':
+        dtype = torch.bfloat16
+    else:
+        dtype = torch.float32
+
 def token_lens_to_mask(token_lens, max_len=None):
     max_len = token_lens.max() if max_len is None else max_len
     mask = torch.arange(max_len, device=token_lens.device)[None, :] < token_lens[:, None]
@@ -179,7 +187,7 @@ def train(
             mask = token_lens_to_mask(lengths) 
             targets = mark_padding(targets, mask, -100)
 
-            with autocast(device.type, dtype=torch.bfloat16):
+            with autocast(device.type, dtype=get_dtype(args)):
                 pred = model(input_ids = tokens.contiguous()).logits
                 B,N,C = pred.shape 
                 loss = loss_fn(logits=pred, targets=targets) 
@@ -231,7 +239,7 @@ def train(
 
 
 def main(gpu, args):
-    assert args.world_size > 1, 'must use distributed training for this script, use train.py for single gpu training'
+    #assert args.world_size > 1, 'must use distributed training for this script, use train.py for single gpu training'
     setup(gpu, args.world_size)
 
     args.config = OmegaConf.load(args.config)
@@ -286,6 +294,8 @@ def main(gpu, args):
     cleanup()
 
 
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-c', '--config', type=str, required=True, help='path to config file')
@@ -293,6 +303,7 @@ if __name__ == '__main__':
     parser.add_argument('-reset_step', '--reset_step', action='store_true', help='reset step to 0')
     parser.add_argument('-anomaly', '--anomaly', action='store_true', help='turn on anomaly detection')
     parser.add_argument('-ws', '--world_size', type=int, default=2, help='number of gpus')
+    parser.add_argument('-dtype', '--dtype', type=str, default='bf16')
 
     args = parser.parse_args()
 

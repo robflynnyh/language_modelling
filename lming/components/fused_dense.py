@@ -11,13 +11,21 @@ import torch.nn.functional as F
 from torch import Tensor
 from torch.distributed import ProcessGroup
 from torch.cuda.amp import custom_bwd, custom_fwd
+import warnings
 
 #import fused_dense_cuda  # from apex
-import fused_dense_lib as fused_dense_cuda
+try:
+    import fused_dense_lib as fused_dense_cuda
+except ImportError:
+    warnings.warn('fused_dense_lib not found, please install it for using fused mlp kernels! (/csrc in flash-attention library)')
 
-from flash_attn.ops.activations import gelu_bwd, relu_bwd, sqrelu_fwd, sqrelu_bwd
-from flash_attn.utils.distributed import all_gather_raw, reduce_scatter_raw, all_reduce_raw
-from flash_attn.utils.distributed import reduce_scatter, all_reduce
+
+try:
+    from flash_attn.ops.activations import gelu_bwd, relu_bwd, sqrelu_fwd, sqrelu_bwd
+    from flash_attn.utils.distributed import all_gather_raw, reduce_scatter_raw, all_reduce_raw
+    from flash_attn.utils.distributed import reduce_scatter, all_reduce
+except ImportError:
+    warnings.warn('flash_attn not found, please install it for using fused mlp kernels!')
 
 
 class FusedDenseFunc(torch.autograd.Function):

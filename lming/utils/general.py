@@ -5,7 +5,7 @@ from lming.models.hyena import HyenaLM
 from lming.models.lru import LruLM
 from lming.models.mamba import MambaLMHeadModel
 from lming.models.meta_transformer import MetaTransformer
-
+from omegaconf import OmegaConf
 
 def load_txt(path:str) -> str:
     with open(path, 'r') as f:
@@ -65,7 +65,6 @@ def convert_from_ddp(model_state_dict):
 
 def optimizer_to(optim, device):
     for param in optim.state.values():
-        # Not sure there are any global tensors in the state dict
         if isinstance(param, torch.Tensor):
             param.data = param.data.to(device)
             if param._grad is not None:
@@ -76,6 +75,16 @@ def optimizer_to(optim, device):
                     subparam.data = subparam.data.to(device)
                     if subparam._grad is not None:
                         subparam._grad.data = subparam._grad.data.to(device)
+
+def fetch_paths():
+    cur_path = os.path.dirname(os.path.abspath(__file__))
+    rel_path = '../../paths.yaml'
+    path = os.path.join(cur_path, rel_path)
+    if not os.path.exists(path):
+        raise FileNotFoundError(f'Could not find paths file at {path} please create one based on paths_template.yaml')
+    paths = OmegaConf.load(path)
+    return paths
+    
 
 
 def load_checkpoint(args, model, optimizer=None, scheduler=None, path='./checkpoints', location='cpu'):

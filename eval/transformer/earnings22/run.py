@@ -107,8 +107,8 @@ def get_perplexity(args:argparse.Namespace, model:transformer_lm, text:str, toke
    
     total_words = get_total_words(text)
     total_tokens = len(tokenized_text)
-    perplexity = torch.exp(loss / total_words)
-    print(f'Perplexity: {perplexity.item()}')
+    perplexity = torch.exp(loss / total_tokens)
+    print(f'Perplexity: {perplexity.item()} - total tokens: {total_tokens} - total words: {total_words}')
     return loss, total_words, total_tokens
 
 def convert_from_ddp(model_state_dict):
@@ -162,7 +162,7 @@ def main(args):
         total_words_sum += total_words
         tokens_sum += total_tokens
 
-    perplexity = torch.exp(loss_sum / total_tokens)
+    perplexity = torch.exp(loss_sum / tokens_sum)
     print(f'Total Words: {total_words_sum}, Total Tokens: {tokens_sum}')
     print(f'\n\n -----------------\nOverall Perplexity: {perplexity.item()}')
   

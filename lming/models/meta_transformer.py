@@ -9,7 +9,16 @@ from lming.models.transformer import transformer_lm, transformer
 from typing import Dict
 
 
+def l2norm_fn(x, dim=-1):
+    return x / x.norm(dim=dim, keepdim=True)
 
+class l2norm(nn.Module):
+    def __init__(self, dim=-1):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, x):
+        return l2norm_fn(x, dim=self.dim)
 
 class MetaTransformer(nn.Module):
     def __init__(
@@ -64,6 +73,7 @@ class MetaTransformer(nn.Module):
         self.meta_project = nn.Sequential(
             nn.LayerNorm(dim),
             nn.Linear(dim, vocab_size),
+            l2norm(dim=-1)
         )
 
         
@@ -107,8 +117,8 @@ class MetaTransformer(nn.Module):
         loss_a, loss_b = loss_fn(out_a, targets_a), loss_fn(out_b, targets_b)
         grads_a, grads_b = torch.autograd.grad(loss_a, list(self.model.parameters()), create_graph=True), torch.autograd.grad(loss_b, list(self.model.parameters()), create_graph=True)
 
-        meta_out_a, _, meta_cache_a = self.meta_model(x = out_ah.detach(), length=length_a, cache={'cache': meta_cache['cache'][:, :, :x.shape[0] // 2], 'cache_lengths': meta_cache['cache_lengths'][:x.shape[0] // 2]} if meta_cache is not None else None)
-        meta_out_b, _, meta_cache_b = self.meta_model(x = out_bh.detach(), length=length_b, cache={'cache': meta_cache['cache'][:, :, x.shape[0] // 2:], 'cache_lengths': meta_cache['cache_lengths'][x.shape[0] // 2:]} if meta_cache is not None else None)
+        meta_out_a, _, meta_cache_a = self.meta_model(x = out_ah, length=length_a, cache={'cache': meta_cache['cache'][:, :, :x.shape[0] // 2], 'cache_lengths': meta_cache['cache_lengths'][:x.shape[0] // 2]} if meta_cache is not None else None)
+        meta_out_b, _, meta_cache_b = self.meta_model(x = out_bh, length=length_b, cache={'cache': meta_cache['cache'][:, :, x.shape[0] // 2:], 'cache_lengths': meta_cache['cache_lengths'][x.shape[0] // 2:]} if meta_cache is not None else None)
 
 
         if removed_from_a > 0:

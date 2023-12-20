@@ -1,0 +1,1 @@
+text files collecting according to: https://github.com/openai/whisper/blob/main/data/README.md

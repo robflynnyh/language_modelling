@@ -8,6 +8,15 @@ import sentencepiece as spm
 import numpy as np
 from typing import Dict, List, Tuple
 from torch.utils.data.distributed import DistributedSampler
+from lming.utils.general import fetch_paths
+
+paths = fetch_paths()
+assert 'datasets' in paths, 'Please add datasets path to fetch_paths()'
+default_spotify_df_path = paths.datasets.spotify.df_path
+default_spotify_base_dir = paths.datasets.spotify.base_dir
+default_thepile_df_path = paths.datasets.thepile.df_path
+default_thepile_base_dir = paths.datasets.thepile.base_dir
+
 
 def load_spotify(podcast_paths_csv, spotify_base_dir):
     df = pd.read_csv(podcast_paths_csv)
@@ -21,14 +30,21 @@ def load_pile(pile_df_path, pile_base_dir):
     df['full_path'] = df['full_path'].apply(lambda x: os.path.join(pile_base_dir, x))
     return df
 
+# spotify_df_path = '/store/store4/data/spotify_text/spotify_podcast_paths.csv',
+# spotify_base_dir = '/store/store4/data/spotify_text/podcast_txt',
+# pile_df_path = '/store/store4/data/thepile/parsed_data.csv',
+# pile_base_dir = '/store/store4/data/thepile/',
+
+
+
 class MultiDataset(torch.utils.data.Dataset):
     def __init__(
         self,
-        spotify_df_path = '/store/store4/data/spotify_text/spotify_podcast_paths.csv',
-        spotify_base_dir = '/store/store4/data/spotify_text/podcast_txt',
-        pile_df_path = '/store/store4/data/thepile/parsed_data.csv',
-        pile_base_dir = '/store/store4/data/thepile/',
-        just_spotify = True, # False
+        spotify_df_path = default_spotify_df_path,
+        spotify_base_dir = default_spotify_base_dir,
+        pile_df_path = default_thepile_df_path,
+        pile_base_dir = default_thepile_base_dir,
+        just_spotify = False, # False
         spotify_upsample = 2.0, # 2
         tokenizer:spm.SentencePieceProcessor = None,
         max_seq_len:int = 1024,

@@ -250,7 +250,7 @@ if __name__ == "__main__":
     )
     print(model)
     model.total_params(verbose=True)
-    x = torch.randint(0, 4096, (3, 1024), device="cuda")
+    x = torch.randint(0, 4096, (3, 16384*2), device="cuda")
     model = model.cuda()
     print(x.shape)
     y = model(x)

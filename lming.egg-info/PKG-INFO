@@ -6,6 +6,7 @@ Home-page: https://github.com/robflynnyh/language_modelling
 Author: Rob Flynn
 Author-email: rjflynn2@sheffield.ac.uk
 License: MIT
+Platform: UNKNOWN
 Classifier: Development Status :: 1 - Planning
 Classifier: Intended Audience :: Science/Research
 Classifier: License :: OSI Approved :: BSD License
@@ -15,3 +16,6 @@ Classifier: Programming Language :: Python :: 2.7
 Classifier: Programming Language :: Python :: 3
 Classifier: Programming Language :: Python :: 3.4
 Classifier: Programming Language :: Python :: 3.5
+
+UNKNOWN
+

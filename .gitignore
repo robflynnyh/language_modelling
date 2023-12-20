@@ -4,3 +4,4 @@
 *.gz
 *.npy
 wandb
+paths.yaml

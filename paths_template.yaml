@@ -1,0 +1,7 @@
+datasets:
+  thepile:
+    base_dir: # path to thepile
+    df_path: # path to thepile dataframe specfying paths to each file with basedir as root
+  spotify:
+    base_dir: # path to spotify
+    df_path: # path to spotify dataframe specfying paths to each file with basedir as root

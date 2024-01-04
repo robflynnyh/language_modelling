@@ -32,6 +32,8 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 import warnings
 
+from mamba_ssm.utils.generation import InferenceParams
+
 def get_dtype(args):
     if args.dtype == 'fp16':
         dtype = torch.half
@@ -121,6 +123,14 @@ def loss_ce(logits, labels, ignore_index=-100, label_smoothing=0.0, reduction='s
             reduction = reduction
         )
 
+
+def drop_inference_cache(cache, selection_mask):
+    for key in cache.key_value_memory_dict.keys():
+        cache.key_value_memory_dict[key] = (cache.key_value_memory_dict[key][0].detach().clone()[selection_mask], cache.key_value_memory_dict[key][1].detach().clone()[selection_mask])
+
+    return cache
+
+
 def train(
         args:argparse.Namespace,
         model:MambaLMHeadModel, 
@@ -152,7 +162,7 @@ def train(
 
         chunks = batch
         # shuffle chunks
-        np.random.shuffle(chunks)
+        #np.random.shuffle(chunks)
 
         was_warmup = scheduler.is_warmup
         if was_warmup:
@@ -165,6 +175,8 @@ def train(
                 scheduler.set_cosine_schedule(remaining_steps)
 
         cur_tokens_in_loss, cur_loss = 0, 0
+        cache = InferenceParams(max_seqlen=np.inf, max_batch_size=np.inf)
+        
         for ix, chunk_json in enumerate(chunks):
             print(f'chunk {ix}/{len(chunks)}')
             
@@ -176,6 +188,7 @@ def train(
             
             tokens, lengths = tokens.to(device, dtype=torch.long), lengths.to(device, dtype=torch.long)
 
+            cache = drop_inference_cache(cache, selection_mask) 
 
             targets = tokens.clone()
             targets[:, :-1] = tokens[:, 1:] # shift right
@@ -188,7 +201,7 @@ def train(
             targets = mark_padding(targets, mask, -100)
 
             with autocast(device.type, dtype=get_dtype(args)):
-                pred = model(input_ids = tokens.contiguous()).logits
+                pred = model(input_ids = tokens.contiguous(), inference_params=cache).logits
                 B,N,C = pred.shape 
                 loss = loss_fn(logits=pred, targets=targets) 
 
@@ -215,7 +228,7 @@ def train(
 
                 learning_rate = scheduler.get_last_lr()[0]
 
-                if wandb_config['use']  and args.gpu == 0:
+                if wandb_config['use'] and args.gpu == 0:
                     wandb.log({
                         'loss': loss_to_log,
                         'learning_rate': learning_rate,

@@ -12,13 +12,15 @@ from lming.utils.general import fetch_paths
 
 paths = fetch_paths()
 assert 'datasets' in paths, 'Please add datasets path to fetch_paths()'
-default_pg19_df_path = paths.datasets.spotify.df_path
-default_pg19_base_dir = paths.datasets.spotify.base_dir
+default_pg19_df_path = paths.datasets.pg19.df_path
+default_pg19_base_dir = paths.datasets.pg19.base_dir
 
 
-def load_pg19(pg19_paths_csv, pg19_base_dir):
+def load_pg19(pg19_paths_csv, pg19_base_dir, split='train'):
+    assert split in ['train', 'validation']
     df = pd.read_csv(pg19_paths_csv)
-    df['filename'] = df['filename'].apply(lambda x: os.path.join(pg19_base_dir, x))
+    df = df.loc[df['split'] == split]
+    df['filename'] = df['filename'].apply(lambda x: os.path.join(pg19_base_dir, split, x))
     df.rename(columns={'filename':'full_path'}, inplace=True)
     df.rename(columns={'total_characters':'length'}, inplace=True)
     return df
@@ -29,6 +31,7 @@ class PG19Dataset(torch.utils.data.Dataset):
         self,
         df_path = default_pg19_df_path,
         base_dir = default_pg19_base_dir,
+        split = 'train',
         tokenizer:spm.SentencePieceProcessor = None,
         max_seq_len:int = 1024,
         batch_size:int = 64,
@@ -37,7 +40,7 @@ class PG19Dataset(torch.utils.data.Dataset):
         skip_to:int = 0,
         random_seed:int = 1234,
     ):
-        self.all_df = load_pg19(df_path, base_dir)
+        self.all_df = load_pg19(df_path, base_dir, split=split)
         self.base_dir = base_dir
     
         self.tokenizer = tokenizer
@@ -119,6 +122,7 @@ class SimpleDataloader(torch.utils.data.DataLoader):
         skip_to:int = 0,
         num_workers = 0,
         pin_memory = False,
+        split = 'train',
     ):
         self.tokenizer = tokenizer
         self.num_workers = num_workers
@@ -132,6 +136,7 @@ class SimpleDataloader(torch.utils.data.DataLoader):
             subgroup_shuffle_size = subgroup_shuffle_size,
             bos_token_id = bos_token_id,
             skip_to = skip_to,
+            split = split,
         )
         super().__init__(
                 self.dataset, 
@@ -158,6 +163,7 @@ class SimpleDistributedDataloader(torch.utils.data.DataLoader):
         pin_memory = False,
         world_size = 1,
         rank = 0,
+        split = 'train',
     ):
         self.tokenizer = tokenizer
         self.num_workers = num_workers
@@ -171,6 +177,7 @@ class SimpleDistributedDataloader(torch.utils.data.DataLoader):
             subgroup_shuffle_size = subgroup_shuffle_size,
             bos_token_id = bos_token_id,
             skip_to = skip_to,
+            split = split,
         )
         super().__init__(
                 self.dataset, 

@@ -25,6 +25,37 @@ def load_pg19(pg19_paths_csv, pg19_base_dir, split='train'):
     df.rename(columns={'total_characters':'length'}, inplace=True)
     return df
 
+class PG19TestDataset(torch.utils.data.Dataset):
+    def __init__(
+        self,
+        base_dir = default_pg19_base_dir,
+        tokenizer:spm.SentencePieceProcessor = None,
+        max_seq_len:int = 1024,
+        bos_token_id:int = 0,
+    ):
+        self.base_dir = base_dir
+        self.tokenizer = tokenizer
+        self.max_seq_len = max_seq_len
+        self.bos_token_id = bos_token_id
+
+        test_path = os.path.join(base_dir, 'test')
+        self.all_paths = [os.path.join(test_path, el) for el in os.listdir(test_path) if el.endswith('.txt')]
+        self.all_paths = sorted(self.all_paths) 
+
+        print(f'Total Files in Test Set: {len(self.all_paths)}')
+
+    def __len__(self):
+        return len(self.all_paths)
+    
+    def __getitem__(self, idx):
+        path = self.all_paths[idx]
+        text = load_txt(path)
+        if self.tokenizer is None:
+            return text
+        tokens = self.tokenizer.encode(text)
+        tokens = [self.bos_token_id] + tokens
+        tokens = [torch.LongTensor(tokens[i:i+self.max_seq_len]) for i in range(0, len(tokens), self.max_seq_len)]
+        return tokens
 
 class PG19Dataset(torch.utils.data.Dataset):
     def __init__(

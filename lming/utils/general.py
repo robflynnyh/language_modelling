@@ -12,6 +12,12 @@ def load_txt(path:str) -> str:
     with open(path, 'r') as f:
         text = f.read() 
     return text
+
+def get_project_abs_path():
+    cur_path = os.path.dirname(os.path.abspath(__file__))
+    rel_path = '../../'
+    path = os.path.join(cur_path, rel_path)
+    return path
     
 def load_model(config:Dict, vocab_size):
     architecture = config.get('architecture', 'transformer')

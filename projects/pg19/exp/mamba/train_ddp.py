@@ -10,7 +10,7 @@ from lming.loading.datasets.PG19Dataset import SimpleDistributedDataloader #####
 import traceback
 from lming.loading.tokenizer import load_tokenizer
 import datetime
-from lming.utils.general import load_model, save_model, load_checkpoint, optimizer_to
+from lming.utils.general import load_model, save_model, load_checkpoint, optimizer_to, get_project_abs_path
 
 from lming.utils.training import (
     load_optimizer, 
@@ -189,7 +189,7 @@ def main(gpu, args):
     checkpoint_dir = args.config['checkpointing']['dir']
     if not os.path.exists(checkpoint_dir): os.makedirs(checkpoint_dir); print(f'created checkpoint dir: {checkpoint_dir}')
 
-    tokenizer = load_tokenizer()
+    tokenizer = load_tokenizer(model_path = os.path.join(get_project_abs_path(), './artifacts/pg19tokenizer/tokenizer.model'))
     model = load_model(args.config, tokenizer.vocab_size())
     tparams = model.print_total_params()
 

@@ -1,0 +1,91 @@
+Mon Jan  8 21:30:38 2024       
++---------------------------------------------------------------------------------------+
+| NVIDIA-SMI 535.129.03             Driver Version: 535.129.03   CUDA Version: 12.2     |
+|-----------------------------------------+----------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |         Memory-Usage | GPU-Util  Compute M. |
+|                                         |                      |               MIG M. |
+|=========================================+======================+======================|
+|   0  Tesla V100-SXM2-32GB           Off | 00000000:1E:00.0 Off |                    0 |
+| N/A   39C    P0              56W / 300W |      0MiB / 32768MiB |      2%      Default |
+|                                         |                      |                  N/A |
++-----------------------------------------+----------------------+----------------------+
+                                                                                         
++---------------------------------------------------------------------------------------+
+| Processes:                                                                            |
+|  GPU   GI   CI        PID   Type   Process name                            GPU Memory |
+|        ID   ID                                                             Usage      |
+|=======================================================================================|
+|  No running processes found                                                           |
++---------------------------------------------------------------------------------------+
+[2024-01-08 21:30:46,005] torch.distributed.run: [WARNING] master_addr is only used for static rdzv_backend and when rdzv_endpoint is not specified.
+/home/acp21rjf/language_modelling/lming/components/fused_dense.py:28: UserWarning: flash_attn not found, please install it for using fused mlp kernels!
+  warnings.warn('flash_attn not found, please install it for using fused mlp kernels!')
+wandb: Currently logged in as: wobrob101. Use `wandb login --relogin` to force relogin
+created checkpoint dir: /fastdata/acp21rjf/checkpoints/mamba_test
+Total params: 120.46 (M)
+running on gpu: 0
+wandb: wandb version 0.16.1 is available!  To upgrade, please run:
+wandb:  $ pip install wandb --upgrade
+wandb: Tracking run with wandb version 0.13.4
+wandb: Run data is saved locally in /home/acp21rjf/language_modelling/projects/pg19/exp/mamba/wandb/run-20240108_213106-2n4zerht
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run mamba_test
+wandb: ⭐️ View project at https://wandb.ai/wobrob101/spotify_language_models
+wandb: 🚀 View run at https://wandb.ai/wobrob101/spotify_language_models/runs/2n4zerht
+
+Loggging with Wandb id: 2n4zerht
+
+Starting from podcast: 0
+Total Characters (B): 11.43
+  0%|          | 0/4767 [00:00<?, ?it/s]chunk 0/17
+  0%|          | 0/4767 [00:05<?, ?it/s]
+Traceback (most recent call last):
+  File "/home/acp21rjf/language_modelling/projects/pg19/exp/mamba/train_ddp.py", line 256, in <module>
+    main(gpu=local_rank, args=args)
+  File "/home/acp21rjf/language_modelling/projects/pg19/exp/mamba/train_ddp.py", line 233, in main
+    final_model = train(args, model, dataloader, optimizer, scheduler, device, skip_to = step)
+  File "/home/acp21rjf/language_modelling/projects/pg19/exp/mamba/train_ddp.py", line 135, in train
+    loss = loss_fn(logits=pred, targets=targets)
+  File "/home/acp21rjf/language_modelling/projects/pg19/exp/mamba/train_ddp.py", line 70, in <lambda>
+    loss_fn = lambda logits, targets: loss_ce(
+  File "/home/acp21rjf/language_modelling/lming/utils/training.py", line 77, in loss_ce
+    return torch.nn.functional.cross_entropy(
+  File "/home/acp21rjf/.conda/envs/torch2/lib/python3.9/site-packages/torch/nn/functional.py", line 3053, in cross_entropy
+    return torch._C._nn.cross_entropy_loss(input, target, weight, _Reduction.get_enum(reduction), ignore_index, label_smoothing)
+torch.cuda.OutOfMemoryError: CUDA out of memory. Tried to allocate 6.00 GiB. GPU 0 has a total capacty of 31.74 GiB of which 2.66 GiB is free. Including non-PyTorch memory, this process has 29.08 GiB memory in use. Of the allocated memory 28.53 GiB is allocated by PyTorch, and 28.69 MiB is reserved by PyTorch but unallocated. If reserved but unallocated memory is large try setting max_split_size_mb to avoid fragmentation.  See documentation for Memory Management and PYTORCH_CUDA_ALLOC_CONF
+wandb: Waiting for W&B process to finish... (failed 1). Press Control-C to abort syncing.
+wandb: Synced mamba_test: https://wandb.ai/wobrob101/spotify_language_models/runs/2n4zerht
+wandb: Synced 5 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: ./wandb/run-20240108_213106-2n4zerht/logs
+[2024-01-08 21:31:26,303] torch.distributed.elastic.multiprocessing.api: [ERROR] failed (exitcode: 1) local_rank: 0 (pid: 10777) of binary: /home/acp21rjf/.conda/envs/torch2/bin/python
+Traceback (most recent call last):
+  File "/home/acp21rjf/.conda/envs/torch2/bin/torchrun", line 8, in <module>
+    sys.exit(main())
+  File "/home/acp21rjf/.conda/envs/torch2/lib/python3.9/site-packages/torch/distributed/elastic/multiprocessing/errors/__init__.py", line 346, in wrapper
+    return f(*args, **kwargs)
+  File "/home/acp21rjf/.conda/envs/torch2/lib/python3.9/site-packages/torch/distributed/run.py", line 806, in main
+    run(args)
+  File "/home/acp21rjf/.conda/envs/torch2/lib/python3.9/site-packages/torch/distributed/run.py", line 797, in run
+    elastic_launch(
+  File "/home/acp21rjf/.conda/envs/torch2/lib/python3.9/site-packages/torch/distributed/launcher/api.py", line 134, in __call__
+    return launch_agent(self._config, self._entrypoint, list(args))
+  File "/home/acp21rjf/.conda/envs/torch2/lib/python3.9/site-packages/torch/distributed/launcher/api.py", line 264, in launch_agent
+    raise ChildFailedError(
+torch.distributed.elastic.multiprocessing.errors.ChildFailedError: 
+============================================================
+train_ddp.py FAILED
+------------------------------------------------------------
+Failures:
+  <NO_OTHER_FAILURES>
+------------------------------------------------------------
+Root Cause (first observed failure):
+[0]:
+  time      : 2024-01-08_21:31:26
+  host      : bessemer-node036.shef.ac.uk
+  rank      : 0 (local_rank: 0)
+  exitcode  : 1 (pid: 10777)
+  error_file: <N/A>
+  traceback : To enable traceback see: https://pytorch.org/docs/stable/elastic/errors.html
+============================================================
+WE ARE DONE, BYE

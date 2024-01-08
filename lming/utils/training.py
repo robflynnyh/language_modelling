@@ -84,6 +84,10 @@ def loss_ce(logits, labels, ignore_index=-100, label_smoothing=0.0, reduction='s
 
 
 def get_dtype(args):
+    '''
+    Returns a torch.dtype based on the args.dtype argument (str)
+    valid values are 'fp16', 'bf16', 'fp32' i.e. float16, bfloat16, float32
+    '''
     if args.dtype == 'fp16':
         dtype = torch.half
     elif args.dtype == 'bf16':

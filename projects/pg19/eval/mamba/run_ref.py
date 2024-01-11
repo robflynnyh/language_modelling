@@ -5,7 +5,7 @@ from typing import Dict, List, Tuple
 from omegaconf.omegaconf import OmegaConf
 import sentencepiece as spm
 from lming.models.transformer import transformer_lm
-from lming.utils.general import load_model, save_model, load_checkpoint
+from lming.utils.general import load_model, save_model, load_checkpoint, convert_from_ddp
 
 from lming.loading.tokenizer import load_tokenizer
 import json
@@ -108,16 +108,8 @@ def get_perplexity(args:argparse.Namespace, model:transformer_lm, text:str, toke
     print(f'Perplexity: {perplexity.item()}, Total words: {total_words}, Total Tokens: {len(tokenized_text)}')
     return loss, total_words, len(tokenized_text)
 
-def convert_from_ddp(model_state_dict):
-    '''
-    Convert model state dict from DDP to single GPU.
-    '''
-    new_state_dict = {}
-    for k, v in model_state_dict.items():
-        if 'module' in k:
-            k = k.replace('module.', '')
-        new_state_dict[k] = v
-    return new_state_dict
+
+
 
 def preprocess_text(text:str):
     # regex to remove anything inside any brackets i.e <> or () or []

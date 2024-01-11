@@ -5,6 +5,7 @@ import madgrad
 from einops import rearrange
 import numpy as np
 from apex.optimizers import FusedAdam
+import warnings
 
 
 class CosineLRScheduler(torch.optim.lr_scheduler._LRScheduler):
@@ -92,6 +93,9 @@ def get_dtype(args):
         dtype = torch.half
     elif args.dtype == 'bf16':
         dtype = torch.bfloat16
+    elif args.dtype == 'fp32':
+        dtype = torch.float32
     else:
+        warnings.warn(f'Unknown dtype {args.dtype}, defaulting to fp32 !')
         dtype = torch.float32
     return dtype

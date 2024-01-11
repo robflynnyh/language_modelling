@@ -65,7 +65,7 @@ def convert_from_ddp(model_state_dict):
     '''
     new_state_dict = {}
     for k, v in model_state_dict.items():
-        if 'module' in k:
+        if k.startswith('module'):
             k = k.replace('module.', '')
         new_state_dict[k] = v
     return new_state_dict

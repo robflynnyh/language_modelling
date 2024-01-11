@@ -3,12 +3,13 @@ architecture: 'mamba'
 model:
   d_model: 1024
   n_layer: 8
+  tie_weights: true
   
 
 optimizer:
   name: 'madgrad'
   args:
-    lr: 8e-4
+    lr: 1e-3
 
 scheduler:
   warmup_steps: 2000
